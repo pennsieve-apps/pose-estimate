@@ -1,0 +1,256 @@
+# yaml-language-server: $schema=https://schemas.pennsieve.io/app-manifest/v1.json
+schemaVersion: "1.0"
+application:
+  name: pose-estimate
+  description: >-
+    Markerless pose estimation from video with DeepLabCut 3 (Mathis labs): finds the animal and its
+    body keypoints (nose, ears, spine, hips, tail, ...) in every frame. By default it uses the
+    pretrained SuperAnimal models of the Mathis lab (TopViewMouse for top-down mouse videos,
+    Quadruped for side views), zero-shot, optionally adapted to the video without labels; or the
+    lab's own trained DeepLabCut model (input `model`). SuperAnimal weights: non-commercial use
+    (academic research only; see THIRD_PARTY.md) - give your own DeepLabCut model for any other
+    use. Probes, validates, trims and crops the video, puts the pose on the session clock (frame
+    timestamps from the session NWB or a timestamps CSV), and writes an NWB file (ndx-pose) ready
+    for DANDI, a DeepLabCut .h5, a labelled QC clip, per-keypoint confidence, and, when the
+    session NWB already holds a pose, the pixel agreement with it. First step of the Markerless
+    Behaviour workflow (pose-estimate, pose-kinematics, behavior-syllables, neuro-report).
+  type: processor
+  tags:
+    - neuroscience
+    - behavior
+    - nwb
+    - video
+    - pose-estimation
+    - deep-learning
+    - deeplabcut
+    - quality-control
+    - gpu
+runtime:
+  # Shared by both variants (below); these are the gpu variant's values (the default). The CPU fallback
+  # of this image and the cpu variant were measured on DANDI 002047 (1100 x 954 px top-view open field):
+  # see README "Runtime". GPU numbers are to be measured on the dev compute node.
+  cpu: 4096
+  memory: 14336
+  computeTypes:
+    - gpu
+  timeoutSeconds: 14400
+parameters:
+  - name: MODEL
+    type: string
+    label: SuperAnimal model
+    description: >-
+      superanimal_topviewmouse (mice filmed from above: open field, home cage, mazes; 27 keypoints)
+      or superanimal_quadruped (four-legged animals filmed from the side; 39 keypoints). HRNet-w32
+      pose model with a Faster R-CNN (ResNet-50 FPN v2) detector. Ignored when a lab model is given
+      in the `model` input. Academic, non-commercial use only.
+    defaultValue: superanimal_topviewmouse
+    validValues:
+      - superanimal_topviewmouse
+      - superanimal_quadruped
+  - name: VIDEO_ADAPT
+    type: boolean
+    label: Adapt to the video
+    description: >-
+      SuperAnimal video adaptation (Ye et al. 2024): pseudo-labels the video with the zero-shot
+      model and fine-tunes the pose model and detector on them (4 epochs each, no human labels),
+      which reduces jitter. Roughly doubles the run time on a T4 and needs about 1 GB of scratch
+      space, so it is off by default; turn it on when the confidence figures show many uncertain
+      frames.
+    defaultValue: false
+  - name: ADAPT_FRAMES
+    type: integer
+    description: >-
+      VIDEO_ADAPT only - frames sampled evenly across the analysed window for the adaptation
+      (the paper adapts on one whole video; 1000 frames keep it to minutes).
+    defaultValue: 1000
+    min: 50
+  - name: MAX_INDIVIDUALS
+    type: integer
+    description: >-
+      Animals per frame. 1 for single-animal videos (recommended; it also stops the model from
+      jumping to a second "animal" such as a cable or shadow). With more than one, the animals are
+      not tracked across frames (each frame's detections are ordered by detector score).
+    defaultValue: 1
+    min: 1
+    max: 20
+  - name: PCUTOFF
+    type: number
+    description: >-
+      Confidence cut-off (DeepLabCut's p-cutoff): keypoints below it count as low-confidence in the
+      figures and summary, and are drawn hollow. All keypoints are written, with their confidence.
+    defaultValue: 0.6
+    min: 0
+    max: 1
+  - name: T_START
+    type: number
+    description: Start of the analysed window, in seconds on the session clock (0 = from the first frame).
+    defaultValue: 0
+    min: 0
+  - name: DURATION
+    type: number
+    description: Length of the analysed window in seconds (0 = to the end of the video).
+    defaultValue: 0
+    min: 0
+  - name: FRAME_STRIDE
+    type: integer
+    description: >-
+      Analyse every n-th frame (2 halves the frame rate and the run time). Times stay the real frame
+      times.
+    defaultValue: 1
+    min: 1
+  - name: CROP
+    type: string
+    description: >-
+      Analyse only this rectangle of the frame, 'x,y,width,height' in pixels (e.g. the arena);
+      empty = the whole frame. Keypoints are still written in pixels of the whole frame.
+    defaultValue: ""
+  - name: DETECTOR_STRIDE
+    type: integer
+    description: >-
+      Run the animal detector on every n-th frame and interpolate its box in between (single
+      animal only). The detector is most of the CPU time; 5 makes the cpu variant about 4x faster.
+      1 = every frame (as DeepLabCut does).
+    defaultValue: 1
+    min: 1
+    max: 30
+  - name: FILL_DETECTOR_GAPS
+    type: boolean
+    description: >-
+      Single animal only. When the detector misses the animal (a small, curled-up or rearing mouse
+      under a cable, say), take the box from the previous frame's pose and keep tracking while the
+      keypoints stay confident. false = only frames the detector finds get a pose (DeepLabCut's
+      behaviour).
+    defaultValue: true
+  - name: BATCH_SIZE
+    type: integer
+    description: Frames per batch of the pose model (16 fits a 16 GB T4 with room to spare; 32-64 on bigger GPUs).
+    defaultValue: 16
+    min: 1
+  - name: QC_CLIP_SECONDS
+    type: number
+    description: Length of the labelled QC clip (the most active stretch of the analysed window); 0 = no clip.
+    defaultValue: 10
+    min: 0
+    max: 120
+  - name: LABEL
+    type: string
+    description: Optional extra folder level (pose-estimate/<LABEL>/) when the step runs more than once in a workflow.
+    defaultValue: ""
+  - name: SEED
+    type: integer
+    description: Seed for torch and numpy (video adaptation).
+    defaultValue: 42
+    min: 0
+  - name: THREADS
+    type: integer
+    description: CPU threads for torch and BLAS; 0 = one per CPU of the container's quota.
+    defaultValue: 0
+    min: 0
+  - name: USE_GPU
+    type: string
+    description: >-
+      auto (use the GPU when torch sees one, else the CPU, logged), true (same) or false (always
+      CPU). The cpu variant's image has no CUDA libraries.
+    defaultValue: "auto"
+    validValues:
+      - auto
+      - "true"
+      - "false"
+# Each input in its own folder (placement: subfolder) when linked; without links the files are found
+# by name and content anywhere under INPUT_DIR.
+inputs:
+  - name: video
+    description: >-
+      Videos (.mp4, .avi, .mov), one session per video. session_id from a sessions.csv sheet, a
+      DANDI/BIDS sub-<a>_ses-<b> in the file or folder name, or the file stem. A
+      <video stem>_timestamps.csv (frame, time) next to a video gives its frame times.
+    mediaTypes:
+      - video/mp4
+      - video/x-msvideo
+      - video/quicktime
+      - text/csv
+    placement: subfolder
+    required: true
+  - name: session
+    description: >-
+      Optional session NWB file(s), e.g. from DANDI: the frame timestamps of the video (an
+      ImageSeries naming the video, or a PoseEstimation with timestamps) put the pose on the
+      session clock, the file's identity and subject are copied into the output NWB, and a pose
+      already in the file (e.g. the authors' DeepLabCut pose) is compared with ours.
+    mediaTypes:
+      - "application/x-hdf5; profile=nwb"
+    formats:
+      - format_3915
+    placement: subfolder
+    required: false
+  - name: model
+    description: >-
+      Optional: the lab's own DeepLabCut 3 (PyTorch) model, used instead of SuperAnimal (the
+      licence-clean path): a .pt from deeplabcut.export_model, or the project's train folder
+      (pytorch_config.yaml with snapshot-*.pt, and snapshot-detector-*.pt for top-down models).
+    mediaTypes:
+      - application/octet-stream
+      - application/x-yaml
+    placement: subfolder
+    required: false
+# One output: the whole of OUTPUT_DIR, everything under pose-estimate/.
+outputs:
+  - name: pose
+    description: >-
+      pose-estimate/<session_id>_pose.nwb (processing/behavior/PoseEstimation, ndx-pose: one
+      PoseEstimationSeries per keypoint in pixels with confidence and frame timestamps on the
+      session clock, Skeletons, scorer, source software), <session_id>_pose.h5 (DeepLabCut table),
+      <session_id>_labeled.mp4 (QC clip), <session_id>_video.json (fps, size, n_frames,
+      time_source, analysed window), figures (<session_id>_example_frames.png, _confidence.png,
+      _keypoint_confidence.png, _agreement.png), sessions.csv, keypoint_qc.csv, summary.json,
+      provenance.json.
+    mediaTypes:
+      - "application/x-hdf5; profile=nwb"
+      - application/x-hdf5
+      - video/mp4
+      - image/png
+      - text/csv
+      - application/json
+variants:
+  - id: gpu
+    name: GPU
+    default: true
+    description: >-
+      CUDA PyTorch on an NVIDIA GPU (T4 or newer): the detector on every frame; a 12-minute
+      30 fps video is expected to take minutes.
+    build:
+      args:
+        TORCH_FLAVOUR: cuda
+    runtime:
+      computeTypes: [gpu]
+  - id: cpu
+    name: CPU (short clips)
+    description: >-
+      CPU-only PyTorch on a standard task, for short clips or excerpts (T_START / DURATION): about
+      2-3 frames per second on 4 vCPU with the detector on every 5th frame, so a minute of 30 fps
+      video takes about 15-20 minutes.
+    build:
+      args:
+        TORCH_FLAVOUR: cpu
+    runtime:
+      computeTypes: [standard]
+      cpu: 4096
+      memory: 8192
+      timeoutSeconds: 28800
+    parameters:
+      DETECTOR_STRIDE:
+        defaultValue: 5
+      BATCH_SIZE:
+        defaultValue: 8
+      USE_GPU:
+        defaultValue: "false"
+
+# How a release is tested before it is made public: the inputs a review run uses.
+# See app-deploy-service docs/app-manifest-review.md.
+review:
+  version: 1
+  generate:
+    command: python -m tests.make_fixture "$REVIEW_INPUT_DIR" --layout both
+    root: linked
+  parameters:
+    QC_CLIP_SECONDS: 1

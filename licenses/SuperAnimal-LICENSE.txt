@@ -1,0 +1,32 @@
+## License
+
+Modified MIT.
+
+Copyright 2023 by Mackenzie Mathis, Shaokai Ye, and contributors. 
+
+Permission is hereby granted to you (hereafter "LICENSEE") a fully-paid, non-exclusive,
+and non-transferable license for academic, non-commercial purposes only (hereafter “LICENSE”)
+to use the "MODEL" weights (hereafter "MODEL"), subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software:
+
+This software may not be used to harm any animal deliberately.
+
+LICENSEE acknowledges that the MODEL is a research tool. 
+THE MODEL IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE MODEL
+OR THE USE OR OTHER DEALINGS IN THE MODEL.
+
+If this license is not appropriate for your application, please contact Prof. Mackenzie W. Mathis 
+(mackenzie@post.harvard.edu) and/or the TTO office at EPFL (tto@epfl.ch) for a commercial use license.
+
+Please cite **Ye et al** if you use this model in your work https://arxiv.org/abs/2203.07436v2.
+
+
+Source: model cards of https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-TopViewMouse (revision d443257e4b1145f7439e0953c2015d60fcdc1185)
+and https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-Quadruped (revision 1ad30fb80cd666f1e5c91578d1cf63bccfa84f80);
+the two cards carry the same licence text. Applies to the four weight files baked into the image:
+superanimal_{topviewmouse,quadruped}_{hrnet_w32,fasterrcnn_resnet50_fpn_v2}.pt

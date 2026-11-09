@@ -1,0 +1,19 @@
+# Local tests (macOS / Linux): pip install -r requirements-dev.txt
+# (pip resolves torch for the local platform; the image pins the linux/amd64 set in requirements*.txt)
+deeplabcut==3.0.2
+ndx-pose==0.4.0
+pynwb==4.2.0
+hdmf==6.2.0
+opencv-python-headless==4.14.0.94
+imageio-ffmpeg==0.8.1
+huggingface-hub==2.4.0
+numpy==2.5.4
+pandas==2.3.3
+matplotlib==3.11.2
+h5py==3.16.0
+tables==3.11.1
+torch==2.14.1
+torchvision==0.29.1
+pytest==8.4.1
+# `make validate` (app.yml schema, CITATION.cff) needs jsonschema, PyYAML and cffconvert 2.0.0 (which pins
+# jsonschema 3.x): install those in a separate venv, VALIDATE_PYTHON=/path/to/venv/bin/python
