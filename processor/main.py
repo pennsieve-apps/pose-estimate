@@ -229,11 +229,14 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
         writer.close()
         clip_written = True
     ident = session.identity if session is not None else None
-    OU.write_nwb(Path(f"{prefix}_pose.nwb"), session_id=sid, identity=ident, video_path=video,
+    missing = OU.write_nwb(Path(f"{prefix}_pose.nwb"), session_id=sid, identity=ident, video_path=video,
                  video_size=(info.width, info.height), times=times, poses=poses, bodyparts=bodyparts,
                  edges=model.edges, scorer=model.scorer, software_version=tool_versions().get("deeplabcut", "?"),
                  model_description=model.description, labeled_clip=clip_name if clip_written else None,
                  sheet_columns=sheet_cols, app_version=version())
+    if missing:
+        warns.append(f"{sid}_pose.nwb is valid NWB but not DANDI-ready: subject {', '.join(missing)} unknown (link the "
+                     "session NWB, or add these columns to sessions.csv)")
     OU.write_dlc_h5(Path(f"{prefix}_pose.h5"), poses, sel, bodyparts, model.scorer)
     vjson = {"session_id": sid, **info.as_dict(), "time_source": tb.source, "time_source_detail": tb.detail,
              "fps_effective": _r(eff_fps, 6), "t_first_frame": _r(times_all[0], 6), "t_last_frame": _r(times_all[-1], 6),

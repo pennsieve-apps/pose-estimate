@@ -112,9 +112,17 @@ def write_session_nwb(path: Path, clip_name: str) -> bool:
     d = np.load(AUTHORS)
     ts = d["timestamps"].astype(np.float64)
     start = datetime(2024, 11, 6, 13, 28, 30, tzinfo=timezone.utc)
-    subject = Subject(subject_id="F01", species="Mus musculus", sex="F", genotype="5xFAD hemizygous")
+    # subject and session metadata as in the DANDI file (sub-F01_ses-OF-F01-S1_behavior+image+ophys.nwb)
+    subject = Subject(subject_id="F01", species="Mus musculus", sex="M", genotype="5xFAD hemizygous",
+                      strain="B6SJL-Tg(5xFAD) on C57BL/6 background (MMRRC:034840-JAX)",
+                      description='drug group: MK-801; vendor: Laboratory Animal Breeding Center "Pushchino"',
+                      date_of_birth=datetime(2023, 11, 17, 21, 0, 0, tzinfo=timezone.utc))
     nwb = NWBFile(session_description="open field, session S1, mouse F01 (2 s test excerpt of DANDI 002047)",
-                  identifier="02c9a16c-3f8a-4c17-8e05-936be690d47f", session_start_time=start, subject=subject)
+                  identifier="02c9a16c-3f8a-4c17-8e05-936be690d47f", session_start_time=start, subject=subject,
+                  session_id="OF_F01_S1", institution="Lomonosov Moscow State University",
+                  lab="Institute for Advanced Brain Studies", experimenter=["Rogozhnikova, Olga", "Ivashkina, Olga"],
+                  keywords=["calcium imaging", "miniscope", "5xFAD"],
+                  experiment_description="Wild-type and 5xFAD mice explored a circular 98-cm arena for 12 min.")
     nwb.add_acquisition(ImageSeries(name="BehaviorVideo", description="behaviour video (external file)",
                                     external_file=[f"../video/{clip_name}"], starting_frame=[0], format="external",
                                     timestamps=ts, unit="n.a."))

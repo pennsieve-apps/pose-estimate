@@ -134,7 +134,23 @@ warning; the data read correctly).
 
 Measured on DANDI 002047, session `sub-F01_ses-OF-F01-S1` (1100 x 954 px, 30 fps):
 
-RUNTIME_TABLE
+All CPU numbers were measured while about five other builders' jobs shared the same 15-core,
+8 GB-Docker M-series Mac, so they are pessimistic and noisy.
+
+| Run | Where | Frames | Wall time | Speed | Peak memory |
+|---|---|---|---|---|---|
+| cpu defaults (`DETECTOR_STRIDE=5`), fixture: 15 + 16 frames | Docker linux/amd64 **under emulation** on an M-series Mac, 4 CPUs, `--memory 4g`, read-only, uid 65534 (cpu image) | 31 | 403 s (incl. ~70 s start-up) | 0.11-0.14 frames/s | 2229 MB (cgroup `memory.peak`) |
+| same, gpu image without a GPU (`USE_GPU=auto` falls back to CPU) | same | 31 | 485 s | 0.12-0.13 frames/s | 2169 MB |
+| cpu defaults, `sub-F01_ses-OF-F01-S1`, 60 s window (100-160 s), no gap filling | native arm64 (same Mac), 6 threads | 1800 | 1052 s | 1.75 frames/s | 2.7 GB RSS |
+| cpu defaults, 30 s windows (100-130 s) of the six demo sessions | native arm64, 6 threads | 900 each | 1064-1664 s per session | 0.54-0.85 frames/s | about 3 GB RSS |
+| detector on every frame (gpu defaults on a CPU) | native arm64, 4 threads, unloaded | 24 | | detector 1.25-1.5 s/frame, pose model 0.05 s/frame | (not measured separately) |
+| `VIDEO_ADAPT=true`, `ADAPT_FRAMES=50`, 2 s clip | native arm64, 4 threads | 60 | 1542 s (1405 s adaptation) | | 7.5 GB RSS |
+
+So on 4 vCPU the cpu variant does roughly 1-2 frames per second natively (a minute of 30 fps
+video in 15-30 minutes); in amd64 emulation about ten times slower. A whole 12-minute session
+(21,583 frames) would take 3-6 hours on 4 vCPU and was **not run on CPU**: whole sessions are for
+the gpu variant. The cpu variant's 8 GB / 4 vCPU leaves room for the 3 GB measured (adaptation
+needs about 8 GB: not on the cpu variant).
 
 The detector (Faster R-CNN on the whole frame) is about 30x the cost of the pose model on a CPU,
 which is why the cpu variant runs it on every 5th frame. **GPU numbers are to be measured on the
@@ -147,8 +163,8 @@ should fit well within a T4's 16 GB; on a bigger card raise `BATCH_SIZE` to 32-6
 
 | Variant | Image | Defaults | When |
 |---|---|---|---|
-| `gpu` (default) | CUDA 12.6 PyTorch (`TORCH_FLAVOUR=cuda`), IMAGE_GPU | detector every frame, batch 16, `USE_GPU=auto` | Whole sessions. Runs on CPU (logged) when no GPU is visible. |
-| `cpu` | CPU-only PyTorch (`TORCH_FLAVOUR=cpu`), IMAGE_CPU | `DETECTOR_STRIDE=5`, batch 8, `USE_GPU=false`, 4 vCPU / 8 GB | Short clips or excerpts (`T_START`, `DURATION`): roughly a minute of video per 15-20 minutes. |
+| `gpu` (default) | CUDA 12.6 PyTorch (`TORCH_FLAVOUR=cuda`), 13.1 GB uncompressed | detector every frame, batch 16, `USE_GPU=auto` | Whole sessions. Runs on CPU (logged) when no GPU is visible. |
+| `cpu` | CPU-only PyTorch (`TORCH_FLAVOUR=cpu`), 3.8 GB uncompressed | `DETECTOR_STRIDE=5`, batch 8, `USE_GPU=false`, 4 vCPU / 8 GB | Short clips or excerpts (`T_START`, `DURATION`): roughly a minute of video per 15-30 minutes on 4 vCPU. |
 
 ## Demo results
 

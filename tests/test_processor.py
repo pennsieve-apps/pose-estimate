@@ -118,6 +118,14 @@ def test_webm_is_read(tmp_path):
     assert I.find_inputs(tmp_path).videos == [out]
 
 
+def test_regular_rate():
+    from processor import outputs as OU
+    assert OU.regular_rate(12.5 + np.arange(100) / 30) == pytest.approx(30)
+    t = np.cumsum(np.r_[0, np.full(99, 1 / 30)])
+    t[50:] += 0.01                                               # a gap
+    assert OU.regular_rate(t) is None
+
+
 def test_frame_selection():
     t = np.arange(300) / 30 + 5.0
     sel = P.frame_selection(t, {"T_START": 6.0, "DURATION": 2.0, "FRAME_STRIDE": 2})
@@ -176,14 +184,19 @@ def test_nwb_content(linked_run):
         assert len(pe.pose_estimation_series) == 27
         nose = pe.pose_estimation_series["nose"]
         assert nose.data.shape == (60, 2) and nose.confidence.shape == (60,)
+        assert nose.timestamps is not None and len(nose.timestamps) == 60   # DANDI 002047: irregular frames
+        assert nwb.identifier != "02c9a16c-3f8a-4c17-8e05-936be690d47f"      # a new identifier per file
+        assert "02c9a16c-3f8a-4c17-8e05-936be690d47f" in nwb.notes and nwb.session_id == "OF_F01_S1"
         assert pe.source_software == "DeepLabCut" and "superanimal_topviewmouse" in pe.scorer
         assert list(pe.skeleton.nodes[:]) == list(pe.pose_estimation_series.keys()) or len(pe.skeleton.nodes) == 27
         if nwb.subject is not None:
             assert nwb.subject.subject_id == "F01"
     with NWBHDF5IO(str(linked_run / "blob_pose.nwb"), "r") as io:
         pe = io.read().processing["behavior"]["PoseEstimation"]
-        ts = pe.pose_estimation_series["nose"].timestamps[:]
-        assert ts[0] == pytest.approx(12.5) and len(ts) == 60     # from blob_timestamps.csv
+        nose = pe.pose_estimation_series["nose"]
+        assert nose.timestamps is None                            # regular frames: starting_time + rate
+        assert nose.starting_time == pytest.approx(12.5) and nose.rate == pytest.approx(30.0, rel=1e-4)
+        assert nose.data.shape[0] == 60                           # times from blob_timestamps.csv
 
 
 @needs_weights

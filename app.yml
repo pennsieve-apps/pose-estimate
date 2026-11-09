@@ -227,8 +227,8 @@ variants:
     name: CPU (short clips)
     description: >-
       CPU-only PyTorch on a standard task, for short clips or excerpts (T_START / DURATION): about
-      2-3 frames per second on 4 vCPU with the detector on every 5th frame, so a minute of 30 fps
-      video takes about 15-20 minutes.
+      1-2 frames per second on 4 vCPU with the detector on every 5th frame, so a minute of 30 fps
+      video takes about 15-30 minutes.
     build:
       args:
         TORCH_FLAVOUR: cpu

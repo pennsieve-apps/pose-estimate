@@ -29,6 +29,18 @@ def _dt(text: str | None) -> datetime | None:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
+def regular_rate(times: np.ndarray) -> float | None:
+    """1 / median interval when every frame interval is within 0.1 % of the median (no gaps), else None."""
+    t = np.asarray(times, dtype=np.float64)
+    if len(t) < 2:
+        return None
+    d = np.diff(t)
+    med = float(np.median(d))
+    if med <= 0 or np.any(np.abs(d - med) > 1e-3 * med):
+        return None
+    return 1.0 / med
+
+
 def _as_list(v) -> list[str]:
     if not v:
         return []
@@ -42,7 +54,8 @@ def individual_names(n: int) -> list[str]:
 def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path: Path, video_size: tuple[int, int],
               times: np.ndarray, poses: np.ndarray, bodyparts: list[str], edges: list[tuple[int, int]],
               scorer: str, software_version: str, model_description: str, labeled_clip: str | None,
-              sheet_columns: dict, app_version: str) -> None:
+              sheet_columns: dict, app_version: str) -> list[str]:
+    """Writes the NWB; returns the subject fields DANDI requires that are unknown (not DANDI-ready)."""
     from hdmf.backends.hdf5.h5_utils import H5DataIO
     from ndx_pose import PoseEstimation, PoseEstimationSeries, Skeleton, Skeletons
     from pynwb import NWBHDF5IO, NWBFile
@@ -56,11 +69,17 @@ def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path:
     else:
         start_note = ""
     ref_time = _dt(ident.get("timestamps_reference_time")) or start
-    identifier = ident.get("identifier") or str(uuid.uuid5(uuid.NAMESPACE_URL, f"pose-estimate/{session_id}/{video_path.name}"))
+    # a new identifier per file (NWB/DANDI require it unique); the source's goes into notes
+    identifier = str(uuid.uuid4())
+    source_note = ""
+    if ident.get("identifier"):
+        source_note = (f" Derived from {ident.get('source_file') or 'the session NWB'} (identifier "
+                       f"{ident['identifier']}) by pose-estimate {app_version}.")
     subject = None
     subj = dict(ident.get("subject") or {})
-    if not subj.get("subject_id") and sheet_columns.get("subject_id"):
-        subj["subject_id"] = sheet_columns["subject_id"]
+    for k in ("subject_id", "species", "sex", "age", "date_of_birth", "genotype", "strain"):
+        if not subj.get(k) and sheet_columns.get(k):          # sessions.csv fills what the NWB lacks
+            subj[k] = sheet_columns[k]
     if subj:
         allowed = ("subject_id", "species", "sex", "age", "genotype", "strain", "description", "weight")
         kw = {k: subj[k] for k in allowed if subj.get(k)}
@@ -75,12 +94,14 @@ def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path:
         experimenter=ident.get("experimenter") or None, institution=ident.get("institution") or None,
         lab=ident.get("lab") or None, experiment_description=ident.get("experiment_description") or None,
         keywords=list(dict.fromkeys(_as_list(ident.get("keywords")) + ["pose estimation", "DeepLabCut", "behavior"])),
-        notes=f"Pose from {video_path.name} by pose-estimate {app_version}: {model_description}.{start_note}")
+        session_id=ident.get("session_id") or session_id,
+        notes=f"Pose from {video_path.name} by pose-estimate {app_version}: {model_description}.{start_note}{source_note}")
     camera = nwb.create_device(name="camera", description=f"camera that recorded {video_path.name}")
     behavior = nwb.create_processing_module(name="behavior", description="Pose estimated from video (pose-estimate)")
     n_ind = poses.shape[1]
     names = individual_names(n_ind)
     skeletons, estimations = [], []
+    rate = regular_rate(times)
     edge_arr = np.array(edges, dtype="uint8" if len(bodyparts) < 256 else "uint16").reshape(-1, 2)
     for ii, ind in enumerate(names):
         skel = Skeleton(name=f"skeleton_{ind}" if n_ind > 1 else "skeleton", nodes=list(bodyparts), edges=edge_arr,
@@ -96,7 +117,9 @@ def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path:
                       unit="pixels", reference_frame=REFERENCE_FRAME,
                       confidence=H5DataIO(conf, compression="gzip", compression_opts=4),
                       confidence_definition=CONFIDENCE_DEFINITION)
-            if ts_ref is None:
+            if rate is not None:          # regular frames: starting_time + rate (conventions.md, "Time")
+                s = PoseEstimationSeries(starting_time=float(times[0]), rate=rate, **kw)
+            elif ts_ref is None:
                 s = PoseEstimationSeries(timestamps=H5DataIO(np.asarray(times, dtype=np.float64), compression="gzip"), **kw)
                 ts_ref = s
             else:
@@ -116,6 +139,12 @@ def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path:
         behavior.add(pe)
     with NWBHDF5IO(str(path), "w") as io:
         io.write(nwb)
+    missing = [k for k in ("species", "sex") if not subj.get(k)]
+    if not (subj.get("age") or subj.get("date_of_birth")):
+        missing.append("age or date_of_birth")
+    if not subj.get("subject_id"):
+        missing.insert(0, "subject_id")
+    return missing
 
 
 def write_dlc_h5(path: Path, poses: np.ndarray, frame_index: np.ndarray, bodyparts: list[str], scorer: str) -> None:

@@ -75,7 +75,8 @@ def read_session_nwb(path: Path, load_pose: bool = True) -> SessionNWB:
             "session_description": _s(f["session_description"][()]) if "session_description" in f else None,
             "subject": {},
         }
-        for k in ("experimenter", "institution", "lab", "experiment_description", "keywords"):
+        ident["source_file"] = path.name
+        for k in ("experimenter", "institution", "lab", "experiment_description", "keywords", "session_id"):
             if f"general/{k}" in f:
                 v = f[f"general/{k}"][()]
                 ident[k] = [_s(x) for x in v] if isinstance(v, np.ndarray) and v.shape else _s(v)
