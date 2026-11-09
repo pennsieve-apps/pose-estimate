@@ -106,6 +106,18 @@ def test_probe_and_timebase(fixture_root):
     assert tb.source == "fps" and tb.times[1] == pytest.approx(1 / 30)
 
 
+def test_webm_is_read(tmp_path):
+    import subprocess
+    exe = VD.ffmpeg_exe()
+    if not exe:
+        pytest.skip("no ffmpeg")
+    out = tmp_path / "clip.webm"
+    subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(FX.CLIP), "-t", "0.5", "-c:v", "libvpx-vp9", "-b:v", "1M",
+                    str(out)], check=True)
+    assert VD.probe(out).n_frames == 15
+    assert I.find_inputs(tmp_path).videos == [out]
+
+
 def test_frame_selection():
     t = np.arange(300) / 30 + 5.0
     sel = P.frame_selection(t, {"T_START": 6.0, "DURATION": 2.0, "FRAME_STRIDE": 2})
@@ -215,7 +227,11 @@ def test_lab_model_port(fixture_root, tmp_path, monkeypatch):
     det = torch.load(get_super_animal_snapshot_path("superanimal_topviewmouse", "fasterrcnn_resnet50_fpn_v2",
                                                     download=False), map_location="cpu", weights_only=True)["model"]
     cfg_d = cfg.to_dict(normalize=True)   # as deeplabcut.export_model writes it
-    torch.save({"config": cfg_d, "pose": pose, "detector": det}, inp / "model" / "DLC_labmouse_hrnet_w32.pt")
+    export = tmp_path / "DLC_labmouse_hrnet_w32.pt"
+    torch.save({"config": cfg_d, "pose": pose, "detector": det}, export)
+    import zipfile                                     # the port takes a .zip too
+    with zipfile.ZipFile(inp / "model" / "labmodel.zip", "w") as z:
+        z.write(export, "exported-models-pytorch/DLC_labmouse_hrnet_w32.pt")
     out = tmp_path / "out"
     assert run(inp, out, monkeypatch, DURATION="1", QC_CLIP_SECONDS="0") == 0
     summ = json.loads((out / "pose-estimate" / "summary.json").read_text())

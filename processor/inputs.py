@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-VIDEO_EXTENSIONS = (".mp4", ".avi", ".mov", ".m4v", ".mkv")
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mov", ".m4v", ".mkv", ".webm")
 NWB_EXTENSIONS = (".nwb",)
 MODEL_HINT_DIRS = ("dlc-models-pytorch", "exported-models-pytorch")
 
@@ -148,7 +148,7 @@ def find_inputs(root: Path) -> Inputs:
         low = f.name.lower()
         in_model = model_root.exists() and _is_under(f, model_root)
         in_model = in_model or any(part in MODEL_HINT_DIRS for part in f.parts)
-        if low.endswith((".pt", ".pth")) or low == "pytorch_config.yaml":
+        if low.endswith((".pt", ".pth")) or low == "pytorch_config.yaml" or (in_model and low.endswith(".zip")):
             model_files.append(f)
             continue
         if in_model:

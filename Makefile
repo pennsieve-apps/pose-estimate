@@ -31,7 +31,7 @@ fixture:
 	$(PYTHON) -m tests.make_fixture data/fixture --layout both
 
 run: clean fixture
-	mkdir -p data/output
+	mkdir -p data/output && chmod 777 data/output
 	docker compose -f docker-compose.yml down --remove-orphans
 	docker compose -f docker-compose.yml build
 	docker compose -f docker-compose.yml up --exit-code-from processor
@@ -40,10 +40,11 @@ run: clean fixture
 	@find data/output -type f | sort
 
 run-gpu-image: clean fixture
-	mkdir -p data/output
+	mkdir -p data/output && chmod 777 data/output
 	docker build --platform linux/amd64 --build-arg TORCH_FLAVOUR=cuda -t $(SERVICE_NAME):gpu .
-	docker run --rm --platform linux/amd64 --network none --memory 4g --user 1000 --read-only --tmpfs /tmp:rw,size=2g \
-		--env-file dev.env -e USE_GPU=auto -v $(CURDIR)/data/fixture/linked:/data/input:ro -v $(CURDIR)/data/output:/data/output \
+	docker run --rm --platform linux/amd64 --network none --memory 4g --user 65534:65534 --read-only --tmpfs /tmp:rw,size=2g,mode=1777 \
+		-e HOME=/tmp/w/home -e TMPDIR=/tmp/w/tmp -e INPUT_DIR=/tmp/s/input -e OUTPUT_DIR=/tmp/s/output \
+		--env-file dev.env -e USE_GPU=auto -v $(CURDIR)/data/fixture/linked:/tmp/s/input:ro -v $(CURDIR)/data/output:/tmp/s/output \
 		$(SERVICE_NAME):gpu
 
 validate:

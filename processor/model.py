@@ -7,7 +7,8 @@ Lab model, either
     for top-down models, `detector` weights), or
   - a DeepLabCut 3 project folder (or just its train folder): pytorch_config.yaml with
     snapshot-*.pt (and snapshot-detector-*.pt for top-down models) beside it; the `best` snapshot
-    when there is one, else the one with the highest epoch.
+    when there is one, else the one with the highest epoch;
+  - either of these as a .zip.
 """
 from __future__ import annotations
 
@@ -123,11 +124,37 @@ def _pick_snapshot(folder: Path, detector: bool) -> Path | None:
     return max(pool, key=epoch)
 
 
+def _unzip(files: list[Path], workdir: Path) -> list[Path]:
+    """A zipped project / train folder / export in the `model` port is unpacked into workdir ($TMPDIR)."""
+    import zipfile
+    out = []
+    for f in files:
+        if f.suffix.lower() != ".zip":
+            out.append(f)
+            continue
+        dest = workdir / f"unzipped-{f.stem}"
+        with zipfile.ZipFile(f) as z:
+            for m in z.infolist():
+                name = Path(m.filename)
+                if m.is_dir() or name.is_absolute() or ".." in name.parts:
+                    continue
+                if not (name.name == "pytorch_config.yaml" or name.suffix in (".pt", ".pth")):
+                    continue
+                target = dest / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(m) as src, target.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                out.append(target)
+        log.info("model: unpacked %s", f.name)
+    return out
+
+
 def lab_model(files: list[Path], device: str, max_individuals: int, workdir: Path) -> PoseModel | None:
     """The lab's model from the `model` port, or None when the port holds none."""
     import torch
     from deeplabcut.pose_estimation_pytorch.config.pose import PoseConfig
 
+    files = _unzip(files, workdir)
     configs = [f for f in files if f.name == "pytorch_config.yaml"]
     exported = []
     for f in files:
@@ -214,4 +241,4 @@ def cleanup(path: Path) -> None:
 
 
 def tmpdir(prefix: str) -> Path:
-    return Path(tempfile.mkdtemp(prefix=prefix, dir="/tmp" if Path("/tmp").is_dir() else None))
+    return Path(tempfile.mkdtemp(prefix=prefix))      # under $TMPDIR (never a hard-coded /tmp path)

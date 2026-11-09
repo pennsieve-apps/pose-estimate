@@ -46,9 +46,9 @@ clock** (the frame timestamps of the session NWB, or a timestamps CSV), as ndx-p
 
 | Port | Direction | What |
 |---|---|---|
-| `video` | in, required | Videos (`.mp4`, `.avi`, `.mov`; `.m4v`, `.mkv` also read), one session per video. Optional `<video stem>_timestamps.csv` (`frame, time`) next to a video, and a `sessions.csv` sheet (`session_id, path, subject_id, condition, group, ...`). |
+| `video` | in, required | Videos (`.mp4`, `.avi`, `.mov`, `.webm`; `.m4v`, `.mkv` also read), one session per video. Optional `<video stem>_timestamps.csv` (`frame, time`) next to a video, and a `sessions.csv` sheet (`session_id, path, subject_id, condition, group, ...`). |
 | `session` | in, optional | Session NWB file(s), e.g. from DANDI: frame timestamps (an `ImageSeries` naming the video, else a `PoseEstimation` / `ImageSeries` of the same session with one timestamp per frame), session identity and subject (copied into our NWB), and any pose already in the file (compared with ours). |
-| `model` | in, optional | The lab's own DeepLabCut 3 (PyTorch) model, used instead of SuperAnimal: a `.pt` from `deeplabcut.export_model`, or the project's train folder (`pytorch_config.yaml` + `snapshot-*.pt`, and `snapshot-detector-*.pt` for a top-down model). The licence-clean path. |
+| `model` | in, optional | The lab's own DeepLabCut 3 (PyTorch) model, used instead of SuperAnimal: a `.pt` from `deeplabcut.export_model`, or the project's train folder (`pytorch_config.yaml` + `snapshot-*.pt`, and `snapshot-detector-*.pt` for a top-down model), either also zipped. The licence-clean path. |
 | `pose` | out | Everything under `pose-estimate/` (below). |
 
 **Session id** (conventions.md): the `sessions.csv` row whose `path` names the file or a parent
@@ -170,6 +170,20 @@ DEMO_RESULTS
 - **Pixels only.** Positions are in pixels of the video frame; `pose-kinematics` converts to cm when
   the arena size is known.
 - **No 3D.**
+- **Uncompressed bottom-up AVIs** (raw DIB, positive height) are refused with a message to
+  re-encode: OpenCV 4.14's FFmpeg reader on linux/amd64 corrupts memory on them and would kill the
+  whole step.
+- **VIDEO_ADAPT on a CPU** is slow (50 frames: 23 minutes on 4 threads of an M-series Mac, under
+  load) and needs about 8 GB of RAM (peak RSS 7.5 GB); use it on the gpu variant.
+
+## Platform notes
+
+The image is Lambda-safe as the brief requires (tested with `--read-only --user 65534:65534
+--tmpfs /tmp`, `HOME` and `TMPDIR` under `/tmp/s`): the weights live in the read-only image
+(DeepLabCut's `modelzoo/checkpoints` in site-packages); matplotlib, numba, torch and Hugging Face
+caches are pointed at `$TMPDIR` at start-up (`processor/entry.py`); all scratch (video adaptation,
+an unpacked lab model) goes to `$TMPDIR`. Its sizes (14 GB gpu, 8 GB / 8 h cpu) are beyond Lambda's
+limits, as pose inference on a whole session should be.
 
 ## Running it locally
 

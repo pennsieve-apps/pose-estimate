@@ -16,7 +16,7 @@ COPY requirements.txt requirements-${TORCH_FLAVOUR}.txt /processor/
 RUN pip install --no-deps --prefer-binary \
         -r /processor/requirements.txt -r /processor/requirements-${TORCH_FLAVOUR}.txt \
     && find /usr/local/lib/python3.12/site-packages -name '*.pyc' -delete \
-    && find /usr/local/lib/python3.12/site-packages -path '*/torch/*' -prune -o -type d -name tests -prune -exec rm -rf {} + \
+    && find /usr/local/lib/python3.12/site-packages -path '*/torch/*' -prune -o -path '*/tables/*' -prune -o -type d -name tests -prune -exec rm -rf {} + \
     && rm -rf /usr/local/lib/python3.12/site-packages/torch/include
 
 # SuperAnimal weights (Mathis lab; academic, non-commercial use only: licenses/SuperAnimal-LICENSE.txt), downloaded
@@ -30,27 +30,23 @@ COPY VERSION /processor/VERSION
 COPY LICENSE THIRD_PARTY.md /processor/
 COPY licenses/ /processor/licenses/
 
+# Lambda-safe: the weights live in the read-only image (site-packages); every writable cache (matplotlib,
+# numba, torch, Hugging Face) is pointed at $TMPDIR at start-up by processor/entry.py, nothing relies on the
+# image's /tmp or HOME, and the Hugging Face hub is offline. USER is set for getpass (any uid works).
 ENV PYTHONPATH="/processor" \
     PYTHONUNBUFFERED=1 \
-    HOME=/tmp \
     MPLBACKEND=Agg \
-    MPLCONFIGDIR=/tmp/matplotlib \
-    NUMBA_CACHE_DIR=/tmp/numba \
-    XDG_CACHE_HOME=/tmp/cache \
-    TORCH_HOME=/tmp/torch \
-    HF_HOME=/tmp/hf \
     HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1 \
+    USER=app \
     TORCH_FLAVOUR=${TORCH_FLAVOUR}
 
-# Build matplotlib's font cache and import the stack once, so a run needs no writes outside /tmp and no network.
+# Import the stack once and check the weights (as root at build time; nothing is kept from this in /tmp).
 RUN python -c "import matplotlib.pyplot, deeplabcut, ndx_pose, pynwb, cv2, imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" \
     && python -m processor.weights verify \
-    && rm -rf /tmp/* && mkdir -p /tmp/matplotlib /tmp/numba /tmp/cache && chmod -R a+rwX /tmp
+    && rm -rf /tmp/* /root/.cache
 
-# Runs as uid 1000 on the platform; nothing here needs root. PyTorch looks the user up (getpass), so uid 1000
-# gets a passwd entry.
-RUN useradd --uid 1000 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin processor
+# Runs as uid 1000 on ECS and as an arbitrary least-privileged user on Lambda; nothing here needs root.
+RUN useradd --uid 1000 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
 USER 1000
 
 ENTRYPOINT ["python3", "-m", "processor.entry"]

@@ -161,13 +161,14 @@ parameters:
 inputs:
   - name: video
     description: >-
-      Videos (.mp4, .avi, .mov), one session per video. session_id from a sessions.csv sheet, a
+      Videos (.mp4, .avi, .mov, .webm), one session per video. session_id from a sessions.csv sheet, a
       DANDI/BIDS sub-<a>_ses-<b> in the file or folder name, or the file stem. A
       <video stem>_timestamps.csv (frame, time) next to a video gives its frame times.
     mediaTypes:
       - video/mp4
       - video/x-msvideo
       - video/quicktime
+      - video/webm
       - text/csv
     placement: subfolder
     required: true
@@ -179,18 +180,17 @@ inputs:
       already in the file (e.g. the authors' DeepLabCut pose) is compared with ours.
     mediaTypes:
       - "application/x-hdf5; profile=nwb"
-    formats:
-      - format_3915
     placement: subfolder
     required: false
   - name: model
     description: >-
       Optional: the lab's own DeepLabCut 3 (PyTorch) model, used instead of SuperAnimal (the
       licence-clean path): a .pt from deeplabcut.export_model, or the project's train folder
-      (pytorch_config.yaml with snapshot-*.pt, and snapshot-detector-*.pt for top-down models).
+      (pytorch_config.yaml with snapshot-*.pt, and snapshot-detector-*.pt for top-down models), either also as a .zip.
     mediaTypes:
       - application/octet-stream
-      - application/x-yaml
+      - application/zip
+      - application/json
     placement: subfolder
     required: false
 # One output: the whole of OUTPUT_DIR, everything under pose-estimate/.

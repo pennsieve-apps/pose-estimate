@@ -53,7 +53,7 @@ references:
   doi: 10.1038/s41593-018-0209-y
   identifiers:
   - type: other
-    value: pmid:30127430
+    value: '30127430'
     description: PubMed ID
 - type: article
   title: Using DeepLabCut for 3D markerless pose estimation across species and behaviors
@@ -79,7 +79,7 @@ references:
   doi: 10.1038/s41596-019-0176-0
   identifiers:
   - type: other
-    value: pmid:31227823
+    value: '31227823'
     description: PubMed ID
 - type: article
   title: Multi-animal pose estimation, identification and tracking with DeepLabCut
@@ -123,7 +123,7 @@ references:
   doi: 10.1038/s41592-022-01443-0
   identifiers:
   - type: other
-    value: pmid:35414125
+    value: '35414125'
     description: PubMed ID
 - type: article
   title: SuperAnimal pretrained pose estimation models for behavioral analysis
@@ -152,7 +152,7 @@ references:
   doi: 10.1038/s41467-024-48792-2
   identifiers:
   - type: other
-    value: pmid:38906853
+    value: '38906853'
     description: PubMed ID
 - type: article
   title: The Neurodata Without Borders ecosystem for neurophysiological data science
@@ -188,7 +188,7 @@ references:
   doi: 10.7554/eLife.78362
   identifiers:
   - type: other
-    value: pmid:36193886
+    value: '36193886'
     description: PubMed ID
 - type: conference-paper
   title: Deep High-Resolution Representation Learning for Human Pose Estimation
@@ -227,7 +227,7 @@ references:
   doi: 10.1109/TPAMI.2016.2577031
   identifiers:
   - type: other
-    value: pmid:27295650
+    value: '27295650'
     description: PubMed ID
 - type: data
   title: Hippocampal CA1 one-photon calcium imaging and pose-tracked behavior in wild-type and 5xFAD mice across four behavioral
