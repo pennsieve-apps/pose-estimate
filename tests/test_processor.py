@@ -221,3 +221,18 @@ def test_lab_model_port(fixture_root, tmp_path, monkeypatch):
     summ = json.loads((out / "pose-estimate" / "summary.json").read_text())
     assert summ["model_kind"] == "lab" and summ["scorer"] == "DLC_DLC_labmouse_hrnet_w32"
     assert summ["sessions"]["clip"]["n_frames_analysed"] == 30
+
+
+def test_bottom_up_raw_avi_is_refused(tmp_path):
+    """OpenCV's linux FFmpeg reader crashes the process on bottom-up uncompressed AVIs: refuse them."""
+    import struct
+    frames, _ = FX.blob_frames(4)
+    p = tmp_path / "bu.avi"
+    FX.write_avi(p, frames)
+    raw = bytearray(p.read_bytes())
+    i = raw.find(b"strf")
+    struct.pack_into("<i", raw, i + 16, FX.SIZE)          # biHeight > 0: bottom-up
+    p.write_bytes(bytes(raw))
+    assert VD.bottom_up_raw_avi(p)
+    with pytest.raises(VD.VideoError):
+        VD.probe(p)

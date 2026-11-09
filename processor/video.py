@@ -78,8 +78,29 @@ def ffmpeg_probe(path: Path) -> dict:
     return out
 
 
+def bottom_up_raw_avi(path: Path) -> bool:
+    """An uncompressed AVI stored bottom-up (positive DIB height): OpenCV 4.14's FFmpeg reader on
+    linux/amd64 corrupts memory on these (negative line size), killing the process."""
+    if path.suffix.lower() != ".avi":
+        return False
+    try:
+        with path.open("rb") as fh:
+            head = fh.read(1 << 16)
+    except OSError:
+        return False
+    i = head.find(b"strf")
+    if i < 0 or len(head) < i + 28:
+        return False
+    import struct
+    _, _, height, _, bits, compression = struct.unpack("<IiiHHI", head[i + 8:i + 28])
+    return compression == 0 and height > 0 and bits in (24, 32)
+
+
 def probe(path: Path) -> VideoInfo:
     """Open, validate and count frames (decoding headers only; seconds for a 10-min video)."""
+    if bottom_up_raw_avi(path):
+        raise VideoError(f"{path.name} is an uncompressed bottom-up AVI, which OpenCV cannot read safely; "
+                         "re-encode it (e.g. ffmpeg -i in.avi -c:v libx264 -crf 18 out.mp4)")
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise VideoError(f"cannot open {path.name} as a video (unsupported codec or not a video file)")

@@ -32,6 +32,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 log = logging.getLogger("pose-estimate")
 for noisy in ("matplotlib", "PIL", "fontTools", "h5py", "hdmf", "pynwb", "deeplabcut", "timm", "numexpr"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
+# DeepLabCut warns about every empty field of the SuperAnimal project configs; not actionable here
+logging.getLogger("deeplabcut.core.config.project_config").setLevel(logging.ERROR)
 
 import numpy as np  # noqa: E402
 

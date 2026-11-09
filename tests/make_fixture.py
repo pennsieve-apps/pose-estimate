@@ -65,7 +65,7 @@ def blob_frames(n: int = N_FRAMES, size: int = SIZE, seed: int = 0) -> tuple[np.
 
 
 def write_avi(path: Path, frames: np.ndarray, fps: int = FPS) -> None:
-    """Uncompressed (BI_RGB, 24-bit BGR, bottom-up) AVI 1.0, readable by FFmpeg / OpenCV."""
+    """Uncompressed (BI_RGB, 24-bit BGR, top-down) AVI 1.0, readable by FFmpeg / OpenCV."""
     n, h, w, _ = frames.shape
     row = (w * 3 + 3) & ~3
     fsize = row * h
@@ -79,11 +79,13 @@ def write_avi(path: Path, frames: np.ndarray, fps: int = FPS) -> None:
     avih = struct.pack("<10I4I", int(1e6 / fps), fsize * fps, 0, 0x10, n, 0, 1, fsize, w, h, 0, 0, 0, 0)
     strh = struct.pack("<4s4sIHHIIIIIIIIhhhh", b"vids", b"DIB ", 0, 0, 0, 0, 1, fps, 0, n, fsize, 0xFFFFFFFF, 0,
                        0, 0, w, h)
-    strf = struct.pack("<IiiHHIIiiII", 40, w, h, 1, 24, 0, fsize, 0, 0, 0, 0)
+    # top-down rows (negative height): a bottom-up DIB decodes to a negative line size, which crashes
+    # OpenCV 4.14's FFmpeg reader on linux/amd64
+    strf = struct.pack("<IiiHHIIiiII", 40, w, -h, 1, 24, 0, fsize, 0, 0, 0, 0)
     hdrl = lst(b"hdrl", chunk(b"avih", avih) + lst(b"strl", chunk(b"strh", strh) + chunk(b"strf", strf)))
     movi_parts, index, offset = [], [], 4
     for f in frames:
-        bgr = f[::-1, :, ::-1]
+        bgr = f[:, :, ::-1]
         data = np.zeros((h, row), np.uint8)
         data[:, : w * 3] = bgr.reshape(h, w * 3)
         c = chunk(b"00db", data.tobytes())
