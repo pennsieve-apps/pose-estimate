@@ -1,0 +1,27 @@
+services:
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TORCH_FLAVOUR: cpu
+    image: pose-estimate:cpu
+    platform: linux/amd64
+    # as the platform's Lambda runtime runs it: an arbitrary user, read-only image, writable /tmp only
+    user: "65534:65534"
+    mem_limit: 4g
+    cpus: 4
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g,mode=1777
+    env_file:
+      - dev.env
+    environment:
+      HOME: /tmp/w/home
+      TMPDIR: /tmp/w/tmp
+      INPUT_DIR: /tmp/s/input
+      OUTPUT_DIR: /tmp/s/output
+    volumes:
+      - ./data/fixture/linked:/tmp/s/input:ro
+      - ./data/output:/tmp/s/output

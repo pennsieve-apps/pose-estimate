@@ -1,0 +1,309 @@
+cff-version: 1.2.0
+message: If you use this app, please cite it and the works it builds on, listed under references.
+type: software
+title: pose-estimate
+abstract: 'Markerless pose estimation from video with DeepLabCut 3 (Mathis labs): SuperAnimal pretrained models (TopViewMouse,
+  Quadruped; Ye et al. 2024), zero-shot or adapted to the video, or a lab''s own DeepLabCut model; video probing, trimming
+  and cropping; pose on the session clock in NWB (ndx-pose) and DeepLabCut format; QC clip and confidence figures; agreement
+  with a pose already in the session NWB. Pennsieve packages these methods and did not develop them. Part of the Pennsieve
+  Markerless Behaviour workflow.'
+authors:
+- name: Pennsieve (University of Pennsylvania)
+contact:
+- given-names: Joost
+  family-names: Wagenaar
+  orcid: https://orcid.org/0009-0004-5925-5451
+  affiliation: University of Pennsylvania
+repository-code: https://github.com/pennsieve-apps/pose-estimate
+license: Apache-2.0
+keywords:
+- neuroscience
+- behavior
+- nwb
+- video
+- pose-estimation
+- deep-learning
+- deeplabcut
+- quality-control
+- gpu
+references:
+- type: article
+  title: 'DeepLabCut: markerless pose estimation of user-defined body parts with deep learning'
+  authors:
+  - family-names: Mathis
+    given-names: Alexander
+  - family-names: Mamidanna
+    given-names: Pranav
+  - family-names: Cury
+    given-names: Kevin M.
+  - family-names: Abe
+    given-names: Taiga
+  - family-names: Murthy
+    given-names: Venkatesh N.
+  - family-names: Mathis
+    given-names: Mackenzie Weygandt
+  - family-names: Bethge
+    given-names: Matthias
+  year: 2018
+  journal: Nature Neuroscience
+  volume: 21
+  issue: '9'
+  start: '1281'
+  end: '1289'
+  doi: 10.1038/s41593-018-0209-y
+  identifiers:
+  - type: other
+    value: '30127430'
+    description: PubMed ID
+- type: article
+  title: Using DeepLabCut for 3D markerless pose estimation across species and behaviors
+  authors:
+  - family-names: Nath
+    given-names: Tanmay
+  - family-names: Mathis
+    given-names: Alexander
+  - family-names: Chen
+    given-names: An Chi
+  - family-names: Patel
+    given-names: Amir
+  - family-names: Bethge
+    given-names: Matthias
+  - family-names: Mathis
+    given-names: Mackenzie Weygandt
+  year: 2019
+  journal: Nature Protocols
+  volume: 14
+  issue: '7'
+  start: '2152'
+  end: '2176'
+  doi: 10.1038/s41596-019-0176-0
+  identifiers:
+  - type: other
+    value: '31227823'
+    description: PubMed ID
+- type: article
+  title: Multi-animal pose estimation, identification and tracking with DeepLabCut
+  authors:
+  - family-names: Lauer
+    given-names: Jessy
+  - family-names: Zhou
+    given-names: Mu
+  - family-names: Ye
+    given-names: Shaokai
+  - family-names: Menegas
+    given-names: William
+  - family-names: Schneider
+    given-names: Steffen
+  - family-names: Nath
+    given-names: Tanmay
+  - family-names: Rahman
+    given-names: Mohammed Mostafizur
+  - family-names: Di Santo
+    given-names: Valentina
+  - family-names: Soberanes
+    given-names: Daniel
+  - family-names: Feng
+    given-names: Guoping
+  - family-names: Murthy
+    given-names: Venkatesh N.
+  - family-names: Lauder
+    given-names: George
+  - family-names: Dulac
+    given-names: Catherine
+  - family-names: Mathis
+    given-names: Mackenzie Weygandt
+  - family-names: Mathis
+    given-names: Alexander
+  year: 2022
+  journal: Nature Methods
+  volume: 19
+  issue: '4'
+  start: '496'
+  end: '504'
+  doi: 10.1038/s41592-022-01443-0
+  identifiers:
+  - type: other
+    value: '35414125'
+    description: PubMed ID
+- type: article
+  title: SuperAnimal pretrained pose estimation models for behavioral analysis
+  authors:
+  - family-names: Ye
+    given-names: Shaokai
+  - family-names: Filippova
+    given-names: Anastasiia
+  - family-names: Lauer
+    given-names: Jessy
+  - family-names: Schneider
+    given-names: Steffen
+  - family-names: Vidal
+    given-names: Maxime
+  - family-names: Qiu
+    given-names: Tian
+  - family-names: Mathis
+    given-names: Alexander
+  - family-names: Mathis
+    given-names: Mackenzie Weygandt
+  year: 2024
+  journal: Nature Communications
+  volume: 15
+  issue: '1'
+  start: '5165'
+  doi: 10.1038/s41467-024-48792-2
+  identifiers:
+  - type: other
+    value: '38906853'
+    description: PubMed ID
+- type: article
+  title: The Neurodata Without Borders ecosystem for neurophysiological data science
+  authors:
+  - family-names: Rübel
+    given-names: Oliver
+  - family-names: Tritt
+    given-names: Andrew
+  - family-names: Ly
+    given-names: Ryan
+  - family-names: Dichter
+    given-names: Benjamin K
+  - family-names: Ghosh
+    given-names: Satrajit
+  - family-names: Niu
+    given-names: Lawrence
+  - family-names: Baker
+    given-names: Pamela
+  - family-names: Soltesz
+    given-names: Ivan
+  - family-names: Ng
+    given-names: Lydia
+  - family-names: Svoboda
+    given-names: Karel
+  - family-names: Frank
+    given-names: Loren
+  - family-names: Bouchard
+    given-names: Kristofer E
+  year: 2022
+  journal: eLife
+  volume: 11
+  start: e78362
+  doi: 10.7554/eLife.78362
+  identifiers:
+  - type: other
+    value: '36193886'
+    description: PubMed ID
+- type: conference-paper
+  title: Deep High-Resolution Representation Learning for Human Pose Estimation
+  authors:
+  - family-names: Sun
+    given-names: Ke
+  - family-names: Xiao
+    given-names: Bin
+  - family-names: Liu
+    given-names: Dong
+  - family-names: Wang
+    given-names: Jingdong
+  year: 2019
+  conference:
+    name: 2019 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)
+  start: '5686'
+  end: '5696'
+  doi: 10.1109/CVPR.2019.00584
+- type: article
+  title: 'Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks'
+  authors:
+  - family-names: Ren
+    given-names: Shaoqing
+  - family-names: He
+    given-names: Kaiming
+  - family-names: Girshick
+    given-names: Ross
+  - family-names: Sun
+    given-names: Jian
+  year: 2017
+  journal: IEEE Transactions on Pattern Analysis and Machine Intelligence
+  volume: 39
+  issue: '6'
+  start: '1137'
+  end: '1149'
+  doi: 10.1109/TPAMI.2016.2577031
+  identifiers:
+  - type: other
+    value: '27295650'
+    description: PubMed ID
+- type: data
+  title: Hippocampal CA1 one-photon calcium imaging and pose-tracked behavior in wild-type and 5xFAD mice across four behavioral
+    paradigms
+  authors:
+  - family-names: Plusnin
+    given-names: Viktor
+  - family-names: Pospelov
+    given-names: Nikita
+  year: 2026
+  doi: 10.48324/dandi.002047/0.261106.0903
+  publisher:
+    name: DANDI Archive
+  url: https://doi.org/10.48324/dandi.002047/0.261106.0903
+  license: CC-BY-4.0
+  notes: 'Demo data: DANDI:002047 version 0.261106.0903, CC-BY-4.0. Creators as DataCite lists them.'
+- type: software
+  title: DeepLabCut
+  authors:
+  - name: M-Lab of Adaptive Intelligence
+  - name: Mathis Group for Computational Neuroscience and AI
+  repository-code: https://github.com/DeepLabCut/DeepLabCut
+  version: 3.0.2
+  license: LGPL-3.0-or-later
+  url: https://www.deeplabcut.org
+- type: software
+  title: ndx-pose
+  authors:
+  - given-names: Ryan
+    family-names: Ly
+  - given-names: Ben
+    family-names: Dichter
+  - given-names: Alexander
+    family-names: Mathis
+  - given-names: Liezl
+    family-names: Maree
+  - given-names: Chris
+    family-names: Brozdowski
+  - given-names: Heberto
+    family-names: Mayorquin
+  - given-names: Talmo
+    family-names: Pereira
+  - given-names: Elizabeth
+    family-names: Berrigan
+  - given-names: Paul
+    family-names: Adkisson
+  - given-names: Alessandra
+    family-names: Trapani
+  repository-code: https://github.com/rly/ndx-pose
+  version: 0.4.0
+  license: BSD-3-Clause
+- type: software
+  title: PyNWB
+  authors:
+  - given-names: Andrew
+    family-names: Tritt
+  - given-names: Ryan
+    family-names: Ly
+  - given-names: Oliver
+    family-names: Ruebel
+  - given-names: Ben
+    family-names: Dichter
+  - given-names: Matthew
+    family-names: Avaylon
+  - given-names: Stephanie
+    family-names: Prince
+  repository-code: https://github.com/NeurodataWithoutBorders/pynwb
+  version: 4.2.0
+  license: BSD-3-Clause
+- type: generic
+  title: SuperAnimal-TopViewMouse and SuperAnimal-Quadruped pretrained weights (HRNet-w32 pose model, Faster R-CNN ResNet-50
+    FPN v2 detector)
+  authors:
+  - given-names: Mackenzie Weygandt
+    family-names: Mathis
+  - given-names: Shaokai
+    family-names: Ye
+  url: https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-TopViewMouse
+  notes: 'Modified MIT licence: academic, non-commercial use only (licenses/SuperAnimal-LICENSE.txt). Cite Ye et al. 2024.'
