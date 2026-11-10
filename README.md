@@ -232,7 +232,7 @@ evaluation.
 ## Platform notes
 
 The image is Lambda-safe as the brief requires (tested with `--read-only --user 65534:65534
---tmpfs /tmp`, `HOME` and `TMPDIR` under `/tmp/s`): the weights live in the read-only image
+--tmpfs /tmp`, `HOME` and `TMPDIR` under `/tmp/w`): the weights live in the read-only image
 (DeepLabCut's `modelzoo/checkpoints` in site-packages); matplotlib, numba, torch and Hugging Face
 caches are pointed at `$TMPDIR` at start-up (`processor/entry.py`); all scratch (video adaptation,
 an unpacked lab model) goes to `$TMPDIR`. Its sizes (14 GB gpu, 8 GB / 8 h cpu) are beyond Lambda's
@@ -251,8 +251,9 @@ make run                                 # cpu image in Docker over the fixture 
 
 Our code is Apache-2.0 (`LICENSE`). DeepLabCut is LGPL-3.0-or-later (used unmodified, as a
 library); PyTorch, pynwb, hdmf and ndx-pose are BSD; OpenCV is Apache-2.0 with an LGPL FFmpeg. The
-image also contains an `ffmpeg` executable built with GPL-3.0 parts (libx264), run as a separate
-program to encode the QC clip; it is not linked into the app. The gpu image contains NVIDIA's CUDA
+image also contains an `ffmpeg` executable that is a GPL-3.0-or-later build of FFmpeg (with libx264;
+`licenses/GPL-3.0.txt`), run as a separate program to encode the QC clip; it is not linked into the
+app. The gpu image contains NVIDIA's CUDA
 libraries (proprietary, redistributable). **The SuperAnimal weights are academic, non-commercial
 only.** Details in `THIRD_PARTY.md`.
 
@@ -294,8 +295,8 @@ lists in `CITATION.cff`.
 
 DeepLabCut and the SuperAnimal models are the work of the A. & M.W. Mathis Labs and the DeepLabCut
 community; the DeepLabCut project thanks the Rowland Institute at Harvard (2017-2020), EPFL (2020-)
-and the Chan Zuckerberg Initiative (Essential Open Source Software for Science) for funding, and
-the labs that contributed SuperAnimal training data (listed on the model cards). NWB and ndx-pose
+and the Chan Zuckerberg Initiative (Essential Open Source Software for Science; Cycle 6 jointly
+with the Kavli Foundation) for funding, and the labs that contributed SuperAnimal training data (listed on the model cards). NWB and ndx-pose
 are developed by the Neurodata Without Borders team (Lawrence Berkeley National Laboratory and
 partners) and CatalystNeuro; the demo data are shared on the DANDI Archive by the authors of
 DANDI:002047.
