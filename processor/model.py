@@ -60,8 +60,8 @@ def licence_notice(name: str) -> str:
     return (f"Pose by the SuperAnimal model {name} (HRNet-w32 + Faster R-CNN weights) of the Mathis Lab, EPFL "
             f"(https://www.mackenziemathislab.org/; model card {HF_CARDS.get(name, HF_CARDS['superanimal_topviewmouse'])}), "
             "run with DeepLabCut (https://github.com/DeepLabCut/DeepLabCut). The weights are used under their "
-            "licence for academic, non-commercial research only; commercial users must contact the Mathis Lab or "
-            "use their own DeepLabCut model (input `model`). When publishing results, please cite Ye et al. 2024, "
+            "licence for academic, non-commercial research only; commercial users must contact the Mathis Lab "
+            "(or EPFL's technology transfer office, tto@epfl.ch) or use their own DeepLabCut model (input `model`). When publishing results, please cite Ye et al. 2024, "
             "Nat Commun 15:5165, doi:10.1038/s41467-024-48792-2, and Mathis et al. 2018, Nat Neurosci "
             "21:1281-1289, doi:10.1038/s41593-018-0209-y.")
 

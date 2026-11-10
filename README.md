@@ -7,7 +7,8 @@
 > [Quadruped](https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-Quadruped)), run with
 > [DeepLabCut](https://github.com/DeepLabCut/DeepLabCut). They are used under their licence for
 > **academic, non-commercial research only** (`licenses/SuperAnimal-LICENSE.txt`, `THIRD_PARTY.md`).
-> **Commercial users** must contact the Mathis Lab, or give the app their own DeepLabCut model
+> **Commercial users** must contact the Mathis Lab (or EPFL's technology transfer office, tto@epfl.ch,
+> as the model cards say), or give the app their own DeepLabCut model
 > through the `model` input (then the SuperAnimal weights are not used).
 > **When publishing results, please cite** Ye et al. 2024
 > ([doi:10.1038/s41467-024-48792-2](https://doi.org/10.1038/s41467-024-48792-2)) and Mathis et
@@ -185,7 +186,8 @@ DANDI 002047, the six staged open-field sessions (day 1, `S1`; 3 WT, 3 5xFAD; 11
 frame times from each NWB's `BehaviorVideo` timestamps, effective rate 29.994 fps), **a 30 s window
 per session** (`T_START=100`, `DURATION=30`, 900 frames each) with the cpu variant's defaults
 (`DETECTOR_STRIDE=5`, gap filling on). **Stack that produced them:** this repository at commit
-`a6c9422` (DeepLabCut 3.0.2, torch 2.14.1, OpenCV 4.14.0.94), run natively (arm64) in the local
+`a6c9422` (DeepLabCut 3.0.2, torch 2.15.0, OpenCV 5.0.0.93, as `provenance.json` records; the images
+pin torch 2.14.1 and OpenCV 4.14.0.94), run natively (arm64) in the local
 virtualenv on an M-series Mac, 6 threads; whole sessions are for the gpu variant on the compute
 node. Outputs in `workflow-systems-neuroscience/data/work/openfield-5xfad/pose-estimate/`. The
 reference is the authors' own DeepLabCut model stored in each NWB

@@ -5,7 +5,7 @@ application:
   description: >-
     Usage and licence: the default SuperAnimal weights are by the Mathis Lab, EPFL
     (https://www.mackenziemathislab.org/; Ye et al. 2024, Nat Commun), for academic, non-commercial
-    research only; commercial users contact the Mathis Lab or give their own DeepLabCut model
+    research only; commercial users contact the Mathis Lab (or EPFL's TTO, tto@epfl.ch) or give their own DeepLabCut model
     (input `model`). Cite Ye et al. 2024 and Mathis et al. 2018. --
     Markerless pose estimation from video with DeepLabCut 3 (https://github.com/DeepLabCut/DeepLabCut):
     finds the animal and its body keypoints (nose, ears, spine, hips, tail, ...) in every frame,
@@ -57,7 +57,7 @@ parameters:
       model and fine-tunes the pose model and detector on them (4 epochs each, no human labels),
       which reduces jitter. Roughly doubles the run time on a T4 and needs about 1 GB of scratch
       space, so it is off by default; turn it on when the confidence figures show many uncertain
-      frames.
+      frames. gpu variant only (the cpu variant refuses it, exit 2).
     defaultValue: false
   - name: ADAPT_FRAMES
     type: integer
@@ -110,7 +110,7 @@ parameters:
     type: integer
     description: >-
       Run the animal detector on every n-th frame and interpolate its box in between (single
-      animal only). The detector is most of the CPU time; 5 makes the cpu variant about 4x faster.
+      animal only), but only between two detections whose boxes overlap or are within one box size. The detector is most of the CPU time; 5 makes the cpu variant about 4x faster.
       1 = every frame (as DeepLabCut does).
     defaultValue: 1
     min: 1
@@ -120,7 +120,8 @@ parameters:
     description: >-
       Single animal only. When the detector misses the animal (a small, curled-up or rearing mouse
       under a cable, say), take the box from the previous frame's pose and keep tracking while the
-      keypoints stay confident. false = only frames the detector finds get a pose (DeepLabCut's
+      pose's mean keypoint confidence is at least 0.25 (the carried box can follow a cable or shadow
+      until the detector finds the animal again). false = only frames the detector finds get a pose (DeepLabCut's
       behaviour).
     defaultValue: true
   - name: BATCH_SIZE
