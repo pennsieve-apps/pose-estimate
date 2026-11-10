@@ -294,3 +294,17 @@ def test_sheet_match_is_exact():
     assert I.sheet_match(rows, Path("/in/video/xcam1.mp4")) is None
     assert I.sheet_match(rows, Path("/in/subj/cam1.mp4")).session_id == "b"
     assert I.sheet_match(rows, Path("/in/other/cam1.mp4")).session_id == "a"
+
+
+def test_same_file_under_two_ports_is_one_input(tmp_path):
+    for port in ("session", "video"):
+        d = tmp_path / port / "sub-A_ses-1"
+        d.mkdir(parents=True)
+        (d / "clip.mp4").write_bytes(b"x" * 10)
+        (d / "sub-A_ses-1.nwb").write_bytes(b"y" * 10)
+    other = tmp_path / "video" / "sub-B_ses-1"
+    other.mkdir(parents=True)
+    (other / "clip.mp4").write_bytes(b"z" * 10)
+    inp = I.find_inputs(tmp_path)
+    assert len(inp.videos) == 2
+    assert len(inp.nwbs) == 1
