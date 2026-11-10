@@ -167,9 +167,11 @@ the gpu variant. The cpu variant's 8 GB / 4 vCPU leaves room for the 3 GB measur
 needs about 8 GB: not on the cpu variant).
 
 The detector (Faster R-CNN on the whole frame) is about 30x the cost of the pose model on a CPU,
-which is why the cpu variant runs it on every 5th frame. **GPU numbers are to be measured on the
-dev compute node.** Expected on a T4 (our estimate, not a measurement: roughly 50-150 frames/s for HRNet-w32
-top-down with a detector on every frame): a 12-minute 30 fps video in a few minutes without adaptation. VRAM: the pose
+which is why both variants run it on every 5th frame by default. **Measured on the dev compute node (T4,
+g4dn.xlarge), detector on every frame (v0.1.0 defaults):** about 6.5 frames/s, i.e. about 55 minutes per
+12-minute 30 fps video, so six sessions took longer than the 4-hour timeout of v0.1.0. v0.1.1 runs the
+detector on every 5th frame on the GPU too (interpolating its box only between close detections, see
+DETECTOR_STRIDE) and allows 8 hours; set `DETECTOR_STRIDE=1` for every-frame detection. VRAM: the pose
 model at batch 16 (256 x 256 crops) and the detector at batch 4 (full frames, resized to 800 px)
 should fit well within a T4's 16 GB; on a bigger card raise `BATCH_SIZE` to 32-64.
 
@@ -177,7 +179,7 @@ should fit well within a T4's 16 GB; on a bigger card raise `BATCH_SIZE` to 32-6
 
 | Variant | Image | Defaults | When |
 |---|---|---|---|
-| `gpu` (default) | CUDA 12.6 PyTorch (`TORCH_FLAVOUR=cuda`), 13.1 GB uncompressed | detector every frame, batch 16, `USE_GPU=auto` | Whole sessions. Runs on CPU (logged) when no GPU is visible. |
+| `gpu` (default) | CUDA 12.6 PyTorch (`TORCH_FLAVOUR=cuda`), 13.1 GB uncompressed | `DETECTOR_STRIDE=5`, batch 16, `USE_GPU=auto`, 8 h timeout | Whole sessions. Runs on CPU (logged) when no GPU is visible. |
 | `cpu` | CPU-only PyTorch (`TORCH_FLAVOUR=cpu`), 3.8 GB uncompressed | `DETECTOR_STRIDE=5`, batch 8, `USE_GPU=false`, 4 vCPU / 8 GB | Short clips or excerpts (`T_START`, `DURATION`): roughly a minute of video per 15-30 minutes on 4 vCPU. |
 
 ## Demo results

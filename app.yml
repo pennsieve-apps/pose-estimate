@@ -220,13 +220,18 @@ variants:
     name: GPU
     default: true
     description: >-
-      CUDA PyTorch on an NVIDIA GPU (T4 or newer): the detector on every frame; a 12-minute
-      30 fps video is expected to take minutes.
+      CUDA PyTorch on an NVIDIA GPU (T4 or newer), with the detector on every 5th frame. Measured on
+      a T4 with the detector on every frame: about 6.5 frames/s (a 12-minute 30 fps video in about
+      55 minutes); the stride makes it several times faster.
     build:
       args:
         TORCH_FLAVOUR: cuda
     runtime:
       computeTypes: [gpu]
+      timeoutSeconds: 28800
+    parameters:
+      DETECTOR_STRIDE:
+        defaultValue: 5
   - id: cpu
     name: CPU (short clips)
     description: >-
