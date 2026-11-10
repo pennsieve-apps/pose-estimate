@@ -409,6 +409,58 @@ def main() -> int:
         nwb_by_sid.setdefault(sid, s)
 
     results, rows, figures, prov_sessions, inputs_used = {}, [], [], {}, []
+
+    def write_tables_and_summary() -> dict:
+        # tables
+        keys = ["session_id", "path", "subject_id", "condition", "group", "status", "n_frames", "n_frames_analysed"]
+        extra = sorted({k for r in rows for k in r} - set(keys))
+        with (out_dir / "sessions.csv").open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=keys + extra)
+            w.writeheader()
+            w.writerows(rows)
+        with (out_dir / "keypoint_qc.csv").open("w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["session_id", "keypoint", "mean_confidence", "fraction_low_confidence", "median_px_error"])
+            for sid, s in results.items():
+                for k, v in (s.get("keypoints") or {}).items():
+                    w.writerow([sid, k, v["mean_confidence"], v["fraction_low_confidence"], v.get("median_px_error", "")])
+
+        ok = [s for s in results.values() if s.get("status") == "ok"]
+        gpu = None
+        if device == "cuda":
+            gpu = {"name": torch.cuda.get_device_name(0), "peak_vram_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1)}
+        summary = {
+            "app": APP, "version": version(), "variant": variant(),
+            "model": model.name, "scorer": model.scorer, "model_kind": model.kind,
+            "licence_notice": ("SuperAnimal model weights (Mathis lab): academic, non-commercial use only; see THIRD_PARTY.md"
+                               if model.kind == "superanimal" else "the lab's own model; SuperAnimal weights not used"),
+            "n_sessions": len(results), "n_ok": len(ok),
+            "sessions": results,
+            "figures": figures,
+            "tables": [{"path": "sessions.csv", "caption": "Sessions processed, with status and frame counts."},
+                       {"path": "keypoint_qc.csv", "caption": "Per session and keypoint: mean confidence, fraction of "
+                        "frames below the cut-off, and the median pixel error against the session NWB's pose when there "
+                        "is one."}],
+            "warnings": warnings_all,
+        }
+        write_json(out_dir / "summary.json", summary)
+        params_out = {k: (",".join(map(str, v)) if isinstance(v, tuple) else ("" if v is None else v)) for k, v in p.items()}
+        prov = {
+            "app": APP, "version": version(), "variant": variant(), "tools": tool_versions(),
+            "parameters": params_out,
+            "inputs": sorted({os.path.relpath(i, in_dir) if i.startswith(str(in_dir)) else i for i in inputs_used}
+                             | ({os.path.relpath(str(f), in_dir) for f in inp.model_files} if model.kind == "lab" else set())),
+            "started": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "finished": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "wall_seconds": round(time.time() - t0, 1),
+            "peak_rss_mb": max(peak_rss_mb(), cgroup_memory_peak_mb() or 0),
+            "gpu": gpu,
+            "sessions": prov_sessions,
+            "citations": CITATIONS,
+        }
+        write_json(out_dir / "provenance.json", prov)
+        return prov
+
     used_ids: dict[str, int] = {}
     runners_cache: dict = {}
     for video in inp.videos:
@@ -449,55 +501,10 @@ def main() -> int:
             prov_sessions[sid] = {"status": "failed", "seconds": round(time.time() - ts, 1), "error": str(exc)[:300]}
             warnings_all.append(f"{sid}: failed: {str(exc)[:300]}")
         rows.append(rec)
+        write_tables_and_summary()   # after every session, so a killed run keeps what it finished
 
-    # tables
-    keys = ["session_id", "path", "subject_id", "condition", "group", "status", "n_frames", "n_frames_analysed"]
-    extra = sorted({k for r in rows for k in r} - set(keys))
-    with (out_dir / "sessions.csv").open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=keys + extra)
-        w.writeheader()
-        w.writerows(rows)
-    with (out_dir / "keypoint_qc.csv").open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["session_id", "keypoint", "mean_confidence", "fraction_low_confidence", "median_px_error"])
-        for sid, s in results.items():
-            for k, v in (s.get("keypoints") or {}).items():
-                w.writerow([sid, k, v["mean_confidence"], v["fraction_low_confidence"], v.get("median_px_error", "")])
-
-    ok = [s for s in results.values() if s.get("status") == "ok"]
-    gpu = None
-    if device == "cuda":
-        gpu = {"name": torch.cuda.get_device_name(0), "peak_vram_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1)}
-    summary = {
-        "app": APP, "version": version(), "variant": variant(),
-        "model": model.name, "scorer": model.scorer, "model_kind": model.kind,
-        "licence_notice": ("SuperAnimal model weights (Mathis lab): academic, non-commercial use only; see THIRD_PARTY.md"
-                           if model.kind == "superanimal" else "the lab's own model; SuperAnimal weights not used"),
-        "n_sessions": len(results), "n_ok": len(ok),
-        "sessions": results,
-        "figures": figures,
-        "tables": [{"path": "sessions.csv", "caption": "Sessions processed, with status and frame counts."},
-                   {"path": "keypoint_qc.csv", "caption": "Per session and keypoint: mean confidence, fraction of "
-                    "frames below the cut-off, and the median pixel error against the session NWB's pose when there "
-                    "is one."}],
-        "warnings": warnings_all,
-    }
-    write_json(out_dir / "summary.json", summary)
-    params_out = {k: (",".join(map(str, v)) if isinstance(v, tuple) else ("" if v is None else v)) for k, v in p.items()}
-    prov = {
-        "app": APP, "version": version(), "variant": variant(), "tools": tool_versions(),
-        "parameters": params_out,
-        "inputs": sorted({os.path.relpath(i, in_dir) if i.startswith(str(in_dir)) else i for i in inputs_used}
-                         | ({os.path.relpath(str(f), in_dir) for f in inp.model_files} if model.kind == "lab" else set())),
-        "started": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "finished": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "wall_seconds": round(time.time() - t0, 1),
-        "peak_rss_mb": max(peak_rss_mb(), cgroup_memory_peak_mb() or 0),
-        "gpu": gpu,
-        "sessions": prov_sessions,
-        "citations": CITATIONS,
-    }
-    write_json(out_dir / "provenance.json", prov)
+    prov = write_tables_and_summary()
+    ok = [s_ for s_ in results.values() if s_.get("status") == "ok"]
     log.info("done: %d of %d sessions ok in %.0f s (peak RSS %.0f MB)", len(ok), len(results), time.time() - t0,
              prov["peak_rss_mb"])
     return 0 if ok else 1
