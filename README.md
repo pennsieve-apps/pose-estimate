@@ -29,9 +29,9 @@ Give it a video of an animal (a mouse filmed from above in an open field, a home
 four-legged animal from the side) and it finds the animal and its body keypoints (nose, ears, eyes,
 neck, spine, hips, shoulders, tail base and tail) in every frame, **without labelling any frames**:
 the SuperAnimal models were trained by the Mathis lab on thousands of labelled frames from many
-labs, and work zero-shot on new videos. On the demo data the zero-shot pose lands within about
-7-10 pixels (about a tenth of the mouse's body length) of the pose the dataset's authors obtained
-with their own, specially trained DeepLabCut model (see "Demo results").
+labs, and work zero-shot on new videos. On the demo data the zero-shot pose lands a median 4.6-7.3 pixels
+(8-11 % of the mouse's body length) from the pose the dataset's authors obtained with their own,
+specially trained DeepLabCut model (see "Demo results").
 
 For a computational analyst: DeepLabCut 3.0.2 (PyTorch engine), top-down: a Faster R-CNN
 (ResNet-50 FPN v2) detector finds the animal, an HRNet-w32 pose model predicts 27 (TopViewMouse) or
@@ -168,7 +168,41 @@ should fit well within a T4's 16 GB; on a bigger card raise `BATCH_SIZE` to 32-6
 
 ## Demo results
 
-DEMO_RESULTS
+DANDI 002047, the six staged open-field sessions (day 1, `S1`; 3 WT, 3 5xFAD; 1100 x 954 px,
+frame times from each NWB's `BehaviorVideo` timestamps, effective rate 29.994 fps), **a 30 s window
+per session** (`T_START=100`, `DURATION=30`, 900 frames each) with the cpu variant's defaults
+(`DETECTOR_STRIDE=5`, gap filling on), run natively on the M-series Mac (whole sessions are for the
+gpu variant on the compute node). Outputs in
+`workflow-systems-neuroscience/data/work/openfield-5xfad/pose-estimate/`. The reference is the
+authors' own DeepLabCut model stored in each NWB (`DLC_resnet152_MiceUniversal152Oct23shuffle1_1000000`,
+DeepLabCut 2.3, 14 keypoints), compared on frames where both models are confident (>= 0.6):
+
+| Session | Genotype | Animal found | Box from previous pose | Mean confidence | Low-confidence frames | **Median error, nose / tail base / centroid** | Body length (ref.) |
+|---|---|---|---|---|---|---|---|
+| sub-F07_ses-OF-F07-S1 | 5xFAD | 94.3 % | 31.7 % | 0.60 | 26 % | **5.5 px** (8.0 % of body length) | 68.7 px |
+| sub-F14_ses-OF-F14-S1 | 5xFAD | 100 % | 4.2 % | 0.63 | 18 % | **5.3 px** (8.0 %) | 66.4 px |
+| sub-F20_ses-OF-F20-S1 | 5xFAD | 100 % | 18.2 % | 0.64 | 11 % | **4.6 px** (7.6 %) | 61.2 px |
+| sub-F35_ses-OF-F35-S1 | WT | 91.7 % | 8.3 % | 0.48 | 50 % | **6.7 px** (10.3 %) | 65.0 px |
+| sub-F40_ses-OF-F40-S1 | WT | 71.6 % | 55.0 % | 0.42 | 69 % | **7.3 px** (10.9 %) | 67.1 px |
+| sub-F48_ses-OF-F48-S1 | WT | 100 % | 17.1 % | 0.64 | 12 % | **5.3 px** (8.5 %) | 62.9 px |
+
+Per keypoint, median over the six sessions' median errors: tail base 4.6 px, nose 7.0 px,
+centroid (`mouse_center` / `bodycenter`) 6.5 px, left ear 7.9 px, right ear 8.6 px, head centre
+9.5 px. Mean confidence over the six sessions: tail base 0.82, centroid 0.79, left ear 0.78, nose
+0.75, right ear 0.74, head midpoint 0.58, ear tips about 0.5 (63 % of frames below the cut-off),
+far tail (`tail5`) 0.14: **the miniscope on the head makes the head keypoints (head midpoint, ear
+tips, eyes) the least reliable after the tail tip**, while the trunk and tail base are solid. The
+weakest session, F40, spends much of the window at the arena wall under the miniscope cable,
+where the detector often loses the mouse and the pose sometimes flips head and tail at low
+confidence (see its example frames); the median error there is still 7.3 px, about a tenth of a
+body length. All six NWB files pass `nwb-inspect` (schema, NWB Inspector with the DANDI
+configuration, DANDI metadata): 0 critical, 0 violations, DANDI-ready.
+
+Earlier checks on `sub-F01_ses-OF-F01-S1` (not among the six): 60 s (100-160 s) without gap
+filling, median 9.4 px with the animal found in 70.7 % of frames; on 16 s with long detector gaps
+gap filling raised the frames with a pose from 48 % to 84 %. Video adaptation on 50 frames of the
+2 s test clip ran end to end (median 6.3 px on its 60 frames), as a functional check, not an
+evaluation.
 
 ## Limitations
 
@@ -179,6 +213,9 @@ DEMO_RESULTS
   ear-tip and eye keypoints are less confident than the trunk, and the detector loses the mouse
   when it curls up under the cable (hence `FILL_DETECTOR_GAPS`). Ears agree with the authors' model
   less well than the nose and tail base, partly because the two models place "ear" differently.
+- **Head-tail flips at low confidence.** Curled up at the wall under a cable, the model can swap
+  head and tail; those frames are low-confidence (hollow in the figures) and should be dropped
+  downstream (`pose-kinematics` filters on confidence).
 - **Identity.** With `MAX_INDIVIDUALS > 1`, animals are not tracked across frames; use a lab model
   with DeepLabCut's tracking for multi-animal work.
 - **Camera views.** TopViewMouse is for overhead views; angled home-cage cameras and side views are
