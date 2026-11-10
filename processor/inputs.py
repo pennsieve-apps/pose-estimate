@@ -144,8 +144,35 @@ class Inputs:
     model_files: list[Path]               # candidate lab-model files (pytorch_config.yaml / *.pt)
 
 
+PORTS = ("video", "session", "model")
+
+
+def port_relative(path: Path, root: Path) -> str:
+    """Path below its input port folder: the same dataset file fed to two ports has one key."""
+    parts = path.relative_to(root).parts
+    if len(parts) > 1 and parts[0] in PORTS:
+        parts = parts[1:]
+    return "/".join(parts)
+
+
+def unique_files(files: list[Path], root: Path) -> list[Path]:
+    """Drop copies of a file that a workflow staged under more than one port (e.g. the whole dataset
+    wired to both video and session): without this every video would be processed once per port."""
+    out, seen = [], set()
+    for f in files:
+        try:
+            key = (port_relative(f, root), f.stat().st_size)
+        except ValueError:
+            key = (str(f), -1)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
+
+
 def find_inputs(root: Path) -> Inputs:
-    files = walk_files(root)
+    files = unique_files(walk_files(root), root)
     model_root = root / "model"
     videos, nwbs, csvs, model_files = [], [], {}, []
     for f in files:
