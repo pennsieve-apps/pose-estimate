@@ -107,13 +107,12 @@ def test_probe_and_timebase(fixture_root):
 
 
 def test_webm_is_read(tmp_path):
-    import subprocess
-    exe = VD.ffmpeg_exe()
-    if not exe:
-        pytest.skip("no ffmpeg")
-    out = tmp_path / "clip.webm"
-    subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(FX.CLIP), "-t", "0.5", "-c:v", "libvpx-vp9", "-b:v", "1M",
-                    str(out)], check=True)
+    w = VD.ClipWriter(tmp_path / "clip", 320, 240, 30.0)
+    for _, fr in VD.read_frames(FX.CLIP, np.arange(15)):
+        w.write(fr[:240, :320])
+    w.close()
+    out = w.path
+    assert w.codec == "vp9" and out.suffix == ".webm"
     assert VD.probe(out).n_frames == 15
     assert I.find_inputs(tmp_path).videos == [out]
 
@@ -152,7 +151,9 @@ def test_outputs_follow_the_contract(linked_run):
             assert (linked_run / f"{sid}{what}").is_file(), sid + what
     prov = json.loads((linked_run / "provenance.json").read_text())
     assert set(prov) == {"app", "version", "variant", "tools", "parameters", "inputs", "started", "finished",
-                         "wall_seconds", "peak_rss_mb", "gpu", "sessions", "citations"}
+                         "wall_seconds", "peak_rss_mb", "gpu", "sessions", "citations", "licence_notice"}
+    for notice in (prov["licence_notice"], json.loads((linked_run / "summary.json").read_text())["licence_notice"]):
+        assert "non-commercial" in notice and "10.1038/s41467-024-48792-2" in notice and "mackenziemathislab" in notice
     assert prov["sessions"][SID]["status"] == "ok"
     rows = list(csv.DictReader((linked_run / "sessions.csv").open()))
     assert {r["session_id"]: r["condition"] for r in rows} == {"blob": "synthetic", SID: "5xFAD"}
@@ -164,7 +165,7 @@ def test_outputs_follow_the_contract(linked_run):
 @needs_weights
 def test_real_clip_pose_and_agreement(linked_run):
     s = json.loads((linked_run / "summary.json").read_text())["sessions"][SID]
-    assert s["fraction_frames_detected"] > 0.95
+    assert s["fraction_frames_found"] > 0.95
     assert s["keypoints"]["nose"]["mean_confidence"] > 0.5
     if s["time_source"] == "nwb:ImageSeries":
         assert s["t_start"] == pytest.approx(100.0267648, abs=1e-4)
@@ -172,7 +173,7 @@ def test_real_clip_pose_and_agreement(linked_run):
         assert agr["matched_keypoints"]["tail_base"] == "tailbase"
         assert agr["median_px_error"] < 15        # a 1100 x 954 frame; the mouse is ~70 px long
         assert (linked_run / f"{SID}_agreement.png").is_file()
-    assert (linked_run / f"{SID}_labeled.mp4").stat().st_size > 1000
+    assert (linked_run / f"{SID}_labeled.webm").stat().st_size > 1000
 
 
 @needs_weights
@@ -187,6 +188,7 @@ def test_nwb_content(linked_run):
         assert nose.timestamps is not None and len(nose.timestamps) == 60   # DANDI 002047: irregular frames
         assert nwb.identifier != "02c9a16c-3f8a-4c17-8e05-936be690d47f"      # a new identifier per file
         assert "02c9a16c-3f8a-4c17-8e05-936be690d47f" in nwb.notes and nwb.session_id == "OF_F01_S1"
+        assert "non-commercial" in nwb.notes and "10.1038/s41593-018-0209-y" in nwb.notes
         assert pe.source_software == "DeepLabCut" and "superanimal_topviewmouse" in pe.scorer
         assert list(pe.skeleton.nodes[:]) == list(pe.pose_estimation_series.keys()) or len(pe.skeleton.nodes) == 27
         if nwb.subject is not None:
@@ -218,7 +220,7 @@ def test_flat_layout_crop_and_stride(fixture_root, tmp_path, monkeypatch):
     df = pd.read_hdf(top / f"{SID}_pose.h5", "df_with_missing")
     x = df.xs("x", level="coords", axis=1).to_numpy()
     assert np.nanmin(x) >= 400 - 1                    # coordinates are in full-frame pixels
-    assert not (top / f"{SID}_labeled.mp4").exists()
+    assert not list(top.glob(f"{SID}_labeled.*"))
 
 
 @needs_weights
@@ -249,6 +251,7 @@ def test_lab_model_port(fixture_root, tmp_path, monkeypatch):
     assert run(inp, out, monkeypatch, DURATION="1", QC_CLIP_SECONDS="0") == 0
     summ = json.loads((out / "pose-estimate" / "summary.json").read_text())
     assert summ["model_kind"] == "lab" and summ["scorer"] == "DLC_DLC_labmouse_hrnet_w32"
+    assert summ["licence_notice"] is None                     # no SuperAnimal weights used
     assert summ["sessions"]["clip"]["n_frames_analysed"] == 30
 
 
@@ -265,3 +268,29 @@ def test_bottom_up_raw_avi_is_refused(tmp_path):
     assert VD.bottom_up_raw_avi(p)
     with pytest.raises(VD.VideoError):
         VD.probe(p)
+
+
+def test_boxes_close():
+    from processor.infer import boxes_close
+    a = np.array([100, 100, 60, 40])
+    assert boxes_close(a, np.array([130, 110, 60, 40]))          # overlapping
+    assert boxes_close(a, np.array([155, 100, 60, 40]))          # beside it: centres 55 px apart, box size 60 px
+    assert not boxes_close(a, np.array([600, 500, 60, 40]))      # a rig object across the arena
+
+
+def test_video_adapt_refused_on_cpu_variant(fixture_root, tmp_path, monkeypatch):
+    monkeypatch.setenv("TORCH_FLAVOUR", "cpu")
+    assert run(fixture_root / "linked", tmp_path, monkeypatch, VIDEO_ADAPT="true") == 2
+
+
+def test_imageseries_rate_timebase():
+    s = SN.SessionNWB(Path("x.nwb"), {}, [SN.ImageSeriesRef("/acquisition/cam", ["video/cam.mp4"], None, 5.0, 25.0)], [])
+    tb, _ = SN.choose_timebase("cam.mp4", 10, 30.0, None, [s], None)
+    assert tb.source == "nwb:ImageSeries" and tb.times[0] == 5.0 and tb.times[1] == pytest.approx(0.04 + 5.0)
+
+
+def test_sheet_match_is_exact():
+    rows = [I.SheetRow("a", "cam1.mp4"), I.SheetRow("b", "subj/cam1.mp4")]
+    assert I.sheet_match(rows, Path("/in/video/xcam1.mp4")) is None
+    assert I.sheet_match(rows, Path("/in/subj/cam1.mp4")).session_id == "b"
+    assert I.sheet_match(rows, Path("/in/other/cam1.mp4")).session_id == "a"

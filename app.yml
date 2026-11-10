@@ -3,17 +3,19 @@ schemaVersion: "1.0"
 application:
   name: pose-estimate
   description: >-
-    Markerless pose estimation from video with DeepLabCut 3 (Mathis labs): finds the animal and its
-    body keypoints (nose, ears, spine, hips, tail, ...) in every frame. By default it uses the
-    pretrained SuperAnimal models of the Mathis lab (TopViewMouse for top-down mouse videos,
-    Quadruped for side views), zero-shot, optionally adapted to the video without labels; or the
-    lab's own trained DeepLabCut model (input `model`). SuperAnimal weights: non-commercial use
-    (academic research only; see THIRD_PARTY.md) - give your own DeepLabCut model for any other
-    use. Probes, validates, trims and crops the video, puts the pose on the session clock (frame
-    timestamps from the session NWB or a timestamps CSV), and writes an NWB file (ndx-pose) ready
-    for DANDI, a DeepLabCut .h5, a labelled QC clip, per-keypoint confidence, and, when the
-    session NWB already holds a pose, the pixel agreement with it. First step of the Markerless
-    Behaviour workflow (pose-estimate, pose-kinematics, behavior-syllables, neuro-report).
+    Usage and licence: the default SuperAnimal weights are by the Mathis Lab, EPFL
+    (https://www.mackenziemathislab.org/; Ye et al. 2024, Nat Commun), for academic, non-commercial
+    research only; commercial users contact the Mathis Lab or give their own DeepLabCut model
+    (input `model`). Cite Ye et al. 2024 and Mathis et al. 2018. --
+    Markerless pose estimation from video with DeepLabCut 3 (https://github.com/DeepLabCut/DeepLabCut):
+    finds the animal and its body keypoints (nose, ears, spine, hips, tail, ...) in every frame,
+    zero-shot with the SuperAnimal TopViewMouse (top-down mouse videos) or Quadruped (side views)
+    models, optionally adapted to the video without labels, or with the lab's own trained
+    DeepLabCut model. Probes, validates, trims and crops the video, puts the pose on the session
+    clock (frame timestamps from the session NWB or a timestamps CSV), and writes an NWB file
+    (ndx-pose) ready for DANDI, a DeepLabCut .h5, a labelled QC clip, per-keypoint confidence, and,
+    when the session NWB already holds a pose, the pixel agreement with it. First step of the
+    Markerless Behaviour workflow (pose-estimate, pose-kinematics, behavior-syllables, neuro-report).
   type: processor
   tags:
     - neuroscience
@@ -200,14 +202,15 @@ outputs:
       pose-estimate/<session_id>_pose.nwb (processing/behavior/PoseEstimation, ndx-pose: one
       PoseEstimationSeries per keypoint in pixels with confidence and frame timestamps on the
       session clock, Skeletons, scorer, source software), <session_id>_pose.h5 (DeepLabCut table),
-      <session_id>_labeled.mp4 (QC clip), <session_id>_video.json (fps, size, n_frames,
+      <session_id>_labeled.webm (QC clip, VP9), <session_id>_video.json (fps, size, n_frames,
       time_source, analysed window), figures (<session_id>_example_frames.png, _confidence.png,
       _keypoint_confidence.png, _agreement.png), sessions.csv, keypoint_qc.csv, summary.json,
       provenance.json.
     mediaTypes:
       - "application/x-hdf5; profile=nwb"
       - application/x-hdf5
-      - video/mp4
+      - video/webm
+      - video/x-msvideo
       - image/png
       - text/csv
       - application/json

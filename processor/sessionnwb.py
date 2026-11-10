@@ -47,6 +47,15 @@ class ImageSeriesRef:
     path: str                   # HDF5 path in the NWB
     external_files: list[str]
     timestamps: np.ndarray | None
+    starting_time: float | None = None   # when the series has starting_time + rate instead of timestamps
+    rate: float | None = None
+
+    def times(self, n_frames: int) -> np.ndarray | None:
+        if self.timestamps is not None and len(self.timestamps):
+            return self.timestamps
+        if self.rate:
+            return float(self.starting_time or 0.0) + np.arange(n_frames) / float(self.rate)
+        return None
 
 
 @dataclass
@@ -92,7 +101,11 @@ def read_session_nwb(path: Path, load_pose: bool = True) -> SessionNWB:
             nt = _s(obj.attrs.get("neurodata_type"))
             if "external_file" in obj and nt and nt.endswith("Series"):
                 ext = [_s(x) for x in obj["external_file"][()]]
-                images.append(ImageSeriesRef("/" + name, ext, _times(obj, None)))
+                st = rate = None
+                if "starting_time" in obj:
+                    st, rate = float(obj["starting_time"][()]), obj["starting_time"].attrs.get("rate")
+                    rate = float(rate) if rate else None
+                images.append(ImageSeriesRef("/" + name, ext, _times(obj, None), st, rate))
             elif nt == "PoseEstimation" and load_pose:
                 ref = PoseRef("/" + name, _s(obj["scorer"][()]) if "scorer" in obj else None,
                               _s(obj["source_software"][()]) if "source_software" in obj else None,
@@ -154,10 +167,13 @@ def choose_timebase(video_name: str, n_frames: int, fps: float, session: Session
     if session is not None:
         candidates += [(session, s) for s in session.image_series if (session, s) not in candidates]
     for nwb, s in candidates:
+        named = any(PurePosixPath(e).name == video_name for e in s.external_files)
+        if s.timestamps is None and s.rate and named:
+            return TimeBase(s.times(n_frames), "nwb:ImageSeries",
+                            f"{nwb.path.name}{s.path} (starting_time + rate)", warns), nwb
         ts = s.timestamps
         if ts is None or len(ts) == 0:
             continue
-        named = any(PurePosixPath(e).name == video_name for e in s.external_files)
         if len(ts) == n_frames:
             return TimeBase(ts, "nwb:ImageSeries", f"{nwb.path.name}{s.path}"), nwb
         if named and len(ts) > n_frames:

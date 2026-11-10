@@ -150,7 +150,7 @@ def confidence_over_time(path: Path, session_id: str, times: np.ndarray, conf: n
     ax1.plot(centers, frac, color=BLUE, lw=2)
     det_frac = np.array([detected[which == b].mean() if (which == b).any() else np.nan for b in range(n_bins)])
     ax1.plot(centers, det_frac, color=INK2, lw=1, ls="--")
-    ax1.text(centers[-1], 1.02, "animal detected", color=INK2, fontsize=7, ha="right", va="bottom")
+    ax1.text(centers[-1], 1.02, "animal found", color=INK2, fontsize=7, ha="right", va="bottom")
     ax1.set_ylim(0, 1.15)
     ax1.set_ylabel(f"fraction\n>= {pcutoff:g}")
     ax1.set_xlabel("time (s, session clock)")

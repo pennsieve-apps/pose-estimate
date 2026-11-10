@@ -2,17 +2,15 @@
 Video preparation: probe, validate, trim, crop, frame stride, streaming frame reader, and the
 labelled QC clip.
 
-Decoding uses OpenCV (its bundled FFmpeg is an LGPL build). The QC clip is encoded to H.264 by
-the ffmpeg executable that imageio-ffmpeg ships, run as a separate program (a GPL build with
-libx264; it is not linked into this process). PyAV is not used: its wheels link a GPL FFmpeg
-(libx264) in-process.
+Everything goes through OpenCV, whose wheels bundle an LGPL build of FFmpeg: decoding, probing,
+and the QC clip, encoded as VP9 in WebM (libvpx, BSD), with MJPEG/AVI as the fallback when the
+build has no VP9 encoder. Nothing GPL is used or shipped: no ffmpeg executable (imageio-ffmpeg's is
+a GPL build) and no PyAV (its wheels link a GPL FFmpeg with libx264).
 """
 from __future__ import annotations
 
 import json
 import logging
-import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,44 +36,14 @@ class VideoInfo:
     duration_s: float          # n_frames / fps
     pts_s: np.ndarray = field(repr=False, default_factory=lambda: np.zeros(0))   # container PTS per frame
     vfr: bool = False          # container timestamps deviate from frame / fps by more than half a frame
-    ffmpeg_probe: dict = field(default_factory=dict)
+    rotation_deg: float = 0.0  # display rotation in the container metadata (frames are analysed as stored)
 
     def as_dict(self) -> dict:
         return {"file": self.path.name, "width": self.width, "height": self.height, "fps": round(self.fps, 6),
                 "n_frames": self.n_frames, "n_frames_header": self.n_frames_header, "codec": self.codec,
                 "duration_s": round(self.duration_s, 3), "variable_frame_rate": self.vfr,
-                **({"ffmpeg": self.ffmpeg_probe} if self.ffmpeg_probe else {})}
-
-
-def ffmpeg_exe() -> str | None:
-    try:
-        import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:  # noqa: BLE001 - optional tool
-        return None
-
-
-def ffmpeg_probe(path: Path) -> dict:
-    """Stream description from `ffmpeg -i` (codec, pixel format, bit rate, rotation), best effort."""
-    exe = ffmpeg_exe()
-    if not exe:
-        return {}
-    try:
-        r = subprocess.run([exe, "-hide_banner", "-i", str(path)], capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
-        return {}
-    text = r.stderr
-    out: dict = {}
-    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", text)
-    if m:
-        out["container_duration_s"] = round(int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)), 3)
-    m = re.search(r"Stream #\S+.*?Video: (.+)", text)
-    if m:
-        out["stream"] = m.group(1).strip()[:200]
-    m = re.search(r"rotate\s*:\s*(-?\d+)", text) or re.search(r"rotation of (-?[\d.]+) degrees", text)
-    if m:
-        out["rotation_deg"] = float(m.group(1))
-    return out
+                "container_duration_s": round(float(self.pts_s[-1]) + 1.0 / self.fps, 3) if len(self.pts_s) else None,
+                "rotation_deg": self.rotation_deg}
 
 
 def bottom_up_raw_avi(path: Path) -> bool:
@@ -110,6 +78,10 @@ def probe(path: Path) -> VideoInfo:
         n_header = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         fourcc = int(cap.get(cv2.CAP_PROP_FOURCC) or 0)
         codec = fourcc.to_bytes(4, "little").decode("ascii", "replace").strip("\x00 ") if fourcc else "?"
+        try:
+            rotation = float(cap.get(cv2.CAP_PROP_ORIENTATION_META) or 0.0)
+        except Exception:  # noqa: BLE001 - older OpenCV
+            rotation = 0.0
         pts = []
         while cap.grab():
             pts.append(cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
@@ -122,7 +94,7 @@ def probe(path: Path) -> VideoInfo:
         raise VideoError(f"{path.name}: implausible frame rate {fps} in the container; re-encode the video with a fixed rate")
     pts_s = np.asarray(pts, dtype=np.float64)
     vfr = bool(n > 2 and np.nanmax(np.abs((pts_s - pts_s[0]) - np.arange(n) / fps)) > 0.5 / fps)
-    return VideoInfo(path, w, h, fps, n, n_header, codec, n / fps, pts_s, vfr, ffmpeg_probe(path))
+    return VideoInfo(path, w, h, fps, n, n_header, codec, n / fps, pts_s, vfr, rotation)
 
 
 def check_crop(crop, info: VideoInfo) -> tuple[int, int, int, int] | None:
@@ -164,38 +136,31 @@ def read_frames(path: Path, indices: np.ndarray, crop=None):
 
 
 class ClipWriter:
-    """H.264 MP4 (yuv420p, faststart) via the ffmpeg executable; falls back to OpenCV mp4v."""
+    """The QC clip through OpenCV's LGPL FFmpeg: VP9 in WebM, else MJPEG in AVI (`suffix` says which)."""
 
-    def __init__(self, path: Path, width: int, height: int, fps: float):
-        self.path, self.width, self.height = path, width - width % 2, height - height % 2
-        self.codec = "h264"
-        exe = ffmpeg_exe()
-        self._proc = self._cv = None
-        if exe:
-            cmd = [exe, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                   "-s", f"{self.width}x{self.height}", "-r", f"{fps:.6f}", "-i", "-",
-                   "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p",
-                   "-movflags", "+faststart", str(path)]
-            self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            self.codec = "mp4v"
-            self._cv = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (self.width, self.height))
+    CODECS = ((".webm", "VP90", "vp9"), (".avi", "MJPG", "mjpeg"))
+
+    def __init__(self, stem: Path, width: int, height: int, fps: float):
+        self.width, self.height = width - width % 2, height - height % 2
+        self._cv = None
+        for suffix, fourcc, name in self.CODECS:
+            path = stem.with_name(stem.name + suffix)
+            w = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*fourcc), fps, (self.width, self.height))
+            if w.isOpened():
+                self._cv, self.path, self.codec = w, path, name
+                break
+            w.release()
+            path.unlink(missing_ok=True)
+            log.warning("QC clip: OpenCV cannot write %s here; trying the next format", name)
+        if self._cv is None:
+            raise VideoError("OpenCV can write neither VP9/WebM nor MJPEG/AVI")
 
     def write(self, rgb: np.ndarray) -> None:
         rgb = np.ascontiguousarray(rgb[: self.height, : self.width])
-        if self._proc is not None:
-            self._proc.stdin.write(rgb.tobytes())
-        else:
-            self._cv.write(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+        self._cv.write(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
 
     def close(self) -> None:
-        if self._proc is not None:
-            self._proc.stdin.close()
-            err = self._proc.stderr.read().decode(errors="replace")
-            if self._proc.wait() != 0:
-                raise VideoError(f"ffmpeg failed writing {self.path.name}: {err[-300:]}")
-        else:
-            self._cv.release()
+        self._cv.release()
 
 
 def write_json(path: Path, obj) -> None:

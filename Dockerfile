@@ -41,7 +41,7 @@ ENV PYTHONPATH="/processor" \
     TORCH_FLAVOUR=${TORCH_FLAVOUR}
 
 # Import the stack once and check the weights (as root at build time; nothing is kept from this in /tmp).
-RUN python -c "import matplotlib.pyplot, deeplabcut, ndx_pose, pynwb, cv2, imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" \
+RUN python -c "import matplotlib.pyplot, deeplabcut, ndx_pose, pynwb, cv2" \
     && python -m processor.weights verify \
     && rm -rf /tmp/* /root/.cache
 

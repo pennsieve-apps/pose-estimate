@@ -1,9 +1,20 @@
 # pose-estimate
 
-> **SuperAnimal weights: non-commercial use.** The default models are the Mathis lab's pretrained
-> SuperAnimal weights, licensed for academic, non-commercial use only (see `THIRD_PARTY.md` and
-> `licenses/SuperAnimal-LICENSE.txt`). For any other use, give the app your own DeepLabCut model
-> (input `model`): then the SuperAnimal weights are not used.
+> **Usage and licence.** The default pose models are the **SuperAnimal** weights of the
+> [Mathis Lab, EPFL](https://www.mackenziemathislab.org/) (Ye et al. 2024, *Nat Commun* 15:5165,
+> [doi:10.1038/s41467-024-48792-2](https://doi.org/10.1038/s41467-024-48792-2); model cards
+> [TopViewMouse](https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-TopViewMouse) and
+> [Quadruped](https://huggingface.co/mwmathis/DeepLabCutModelZoo-SuperAnimal-Quadruped)), run with
+> [DeepLabCut](https://github.com/DeepLabCut/DeepLabCut). They are used under their licence for
+> **academic, non-commercial research only** (`licenses/SuperAnimal-LICENSE.txt`, `THIRD_PARTY.md`).
+> **Commercial users** must contact the Mathis Lab, or give the app their own DeepLabCut model
+> through the `model` input (then the SuperAnimal weights are not used).
+> **When publishing results, please cite** Ye et al. 2024
+> ([doi:10.1038/s41467-024-48792-2](https://doi.org/10.1038/s41467-024-48792-2)) and Mathis et
+> al. 2018, *Nat Neurosci* 21:1281-1289
+> ([doi:10.1038/s41593-018-0209-y](https://doi.org/10.1038/s41593-018-0209-y)).
+> Every run that uses SuperAnimal writes this notice, with these links, to its log, `summary.json`,
+> `provenance.json` (`licence_notice`) and the `notes` of each output NWB.
 
 This app runs **[DeepLabCut](https://github.com/DeepLabCut/DeepLabCut)**, developed by Alexander
 Mathis, Mackenzie Weygandt Mathis and the DeepLabCut contributors at the A. & M.W. Mathis Labs
@@ -76,15 +87,18 @@ not used. Real cameras rarely run at a constant rate (DANDI 002047's frame inter
 | `PCUTOFF` | `0.6` | Confidence cut-off (DeepLabCut's p-cutoff) for the figures and summary. All keypoints are written with their confidence. |
 | `T_START`, `DURATION` | `0`, `0` | Analysed window, seconds on the session clock (0 = from the first frame / to the end). |
 | `FRAME_STRIDE` | `1` | Analyse every n-th frame. |
-| `CROP` | empty | `x,y,width,height`: analyse only this rectangle (e.g. the arena). Coordinates are still written in pixels of the whole frame. |
-| `DETECTOR_STRIDE` | `1` / `5` | Run the detector on every n-th frame (and the last of each chunk of about 32 frames) and interpolate its box, enlarged by 15 %, in between. Single animal only. |
-| `FILL_DETECTOR_GAPS` | `true` | Single animal: when the detector misses the animal, use a box around the previous frame's confident keypoints, frame by frame, while the mean keypoint confidence stays above 0.25. |
+| `CROP` | empty | `x,y,width,height`: analyse only this rectangle (e.g. the arena). Coordinates are still written in pixels of the whole frame. **Crop to the arena when the rig has bright fixtures** (wall marks, white patches, lights): the detector can take them for the animal. |
+| `DETECTOR_STRIDE` | `1` / `5` | Run the detector on every n-th frame (and the last of each chunk of about 32 frames) and interpolate its box, enlarged by 15 %, in between, but only between two detections whose boxes overlap or whose centres are within one box size (a jump means one of them is not the animal). Single animal only. |
+| `FILL_DETECTOR_GAPS` | `true` | Single animal: when the detector finds no animal, use a box around the previous frame's confident keypoints, frame by frame, while the pose's mean keypoint confidence is at least 0.25. The carried box can follow a non-mouse object (a cable, a shadow) until the detector finds the animal again, as long as the pose model is confident on it. |
 | `BATCH_SIZE` | `16` / `8` | Frames per pose-model batch (the detector takes 1 on CPU, up to 4 on GPU). |
 | `QC_CLIP_SECONDS` | `10` | Length of the labelled QC clip, taken from the most active, well-tracked stretch; 0 = none. |
 | `LABEL` | empty | Extra folder level `pose-estimate/<LABEL>/`. |
 | `SEED`, `THREADS`, `USE_GPU` | `42`, `0`, `auto` / `false` | Seed; CPU threads (0 = cgroup quota); `auto` uses the GPU when torch sees one and logs `USE_GPU=auto: cuda not available, using cpu` otherwise. |
 
-Bad values exit with code 2. A session that fails is logged and skipped; the step exits 1 only
+In single-animal mode a pose whose mean keypoint confidence is below 0.25 counts as **not found**
+(written as NaN), whatever its box came from, so a detector false positive on a rig object gives
+no pose and gap filling can take over. Bad values exit with code 2; so does `VIDEO_ADAPT=true` on
+the cpu variant (it peaks at about 7.5 GB, against that variant's 8 GB). A session that fails is logged and skipped; the step exits 1 only
 when every session failed or there was no video.
 
 **Why the detector gets help.** On the demo videos the mouse is small (about 70 px long in a
@@ -93,8 +107,7 @@ under the cable the SuperAnimal detector often finds nothing (in one minute of
 `sub-F01_ses-OF-F01-S1`, 29 % of frames had no detection; in the frames we checked, nothing even at
 a 0.01 score threshold). The pose model itself
 copes well with those frames once it is given a box, so `FILL_DETECTOR_GAPS` carries the box from
-the previous frame's pose; on a 16 s stretch with long detector gaps this raised the frames with a
-pose from 48 % to 84 %, at 5-10 px from the authors' pose.
+the previous frame's pose (see "Demo results" for how many frames that concerns).
 
 ## Outputs
 
@@ -104,8 +117,8 @@ All in `$OUTPUT_DIR/pose-estimate/` (`/<LABEL>/` when set):
 |---|---|
 | `<session_id>_pose.nwb` | `processing/behavior/PoseEstimation` (ndx-pose 0.4.0): one `PoseEstimationSeries` per keypoint (`data` x, y in pixels of the original frame, `confidence` 0-1, NaN where the animal was not found; frame times on the session clock: explicit `timestamps`, stored once and linked, when the frame intervals vary (as in DANDI 002047), else `starting_time` + `rate` when every interval is within 0.1 % of the median), `Skeletons/skeleton` (nodes, edges), `scorer` (e.g. `superanimal_topviewmouse_hrnet_w32_fasterrcnn_resnet50_fpn_v2`), `source_software` DeepLabCut + version, `original_videos`, `labeled_videos`, `dimensions`, a `camera` device. Copies `session_start_time`, `timestamps_reference_time`, `session_id`, `session_description`, `subject`, `experimenter`, `institution`, `lab`, `keywords` and `experiment_description` from the session NWB; its `identifier` is a new UUID, and `notes` names the source file and its identifier. Without a session NWB, `session_start_time` is the video file's modification time (said in `notes`) and the subject comes from `sessions.csv` columns (`subject_id`, `species`, `sex`, `age`, `date_of_birth`, `genotype`, `strain`); when species, sex or age are unknown the file is valid NWB but not DANDI-ready, and `summary.json` warns. With several animals: `PoseEstimation_animal<i>`. |
 | `<session_id>_pose.h5` | DeepLabCut's table (key `df_with_missing`): columns `(scorer, bodyparts, coords)` with coords `x, y, likelihood` (`(scorer, individuals, bodyparts, coords)` for several animals); rows indexed by the **video frame number**. |
-| `<session_id>_labeled.mp4` | QC clip (H.264, at most 720 px wide): keypoints coloured by body region, hollow below `PCUTOFF`, skeleton in white, session time stamped. |
-| `<session_id>_video.json` | Video probe and time base: `width, height, fps, n_frames` (decoded count), `n_frames_header`, `codec`, `duration_s`, `variable_frame_rate`, `ffmpeg` (stream line, rotation), `time_source`, `time_source_detail`, `fps_effective`, `t_first_frame`, `t_last_frame`, `analysed` (window, frame range, stride, crop), `qc_clip`, `drift_pct` (> 0.1 % only). |
+| `<session_id>_labeled.webm` | QC clip (VP9 in WebM, written by OpenCV's LGPL FFmpeg; MJPEG in `_labeled.avi` only if a build lacks VP9, with a warning; at most 720 px wide): keypoints coloured by body region, hollow below `PCUTOFF`, skeleton in white, session time stamped. |
+| `<session_id>_video.json` | Video probe and time base: `width, height, fps, n_frames` (decoded count), `n_frames_header`, `codec`, `duration_s`, `variable_frame_rate`, `container_duration_s`, `rotation_deg` (container display rotation; frames are analysed as stored), `time_source`, `time_source_detail`, `fps_effective`, `t_first_frame`, `t_last_frame`, `analysed` (window, frame range, stride, crop), `qc_clip`, `drift_pct` (> 0.1 % only). |
 | `<session_id>_example_frames.png`, `_confidence.png`, `_keypoint_confidence.png`, `_agreement.png` | Figures with captions in `summary.json` (agreement only when the session NWB has a pose). |
 | `sessions.csv` | `session_id, path, subject_id, condition, group, status, n_frames, n_frames_analysed` + other sheet columns. |
 | `keypoint_qc.csv` | `session_id, keypoint, mean_confidence, fraction_low_confidence, median_px_error`. |
@@ -227,7 +240,10 @@ evaluation.
   re-encode: OpenCV 4.14's FFmpeg reader on linux/amd64 corrupts memory on them and would kill the
   whole step.
 - **VIDEO_ADAPT on a CPU** is slow (50 frames: 23 minutes on 4 threads of an M-series Mac, under
-  load) and needs about 8 GB of RAM (peak RSS 7.5 GB); use it on the gpu variant.
+  load) and needs about 8 GB of RAM (peak RSS 7.5 GB): the cpu variant refuses it (exit 2); use
+  the gpu variant.
+- **Rig objects.** Bright fixtures can be detected as the animal; with a single animal such boxes
+  give low-confidence poses, which are dropped, but `CROP` to the arena avoids them altogether.
 
 ## Platform notes
 
@@ -250,10 +266,11 @@ make run                                 # cpu image in Docker over the fixture 
 ## Licences
 
 Our code is Apache-2.0 (`LICENSE`). DeepLabCut is LGPL-3.0-or-later (used unmodified, as a
-library); PyTorch, pynwb, hdmf and ndx-pose are BSD; OpenCV is Apache-2.0 with an LGPL FFmpeg. The
-image also contains an `ffmpeg` executable that is a GPL-3.0-or-later build of FFmpeg (with libx264;
-`licenses/GPL-3.0.txt`), run as a separate program to encode the QC clip; it is not linked into the
-app. The gpu image contains NVIDIA's CUDA
+library; the LGPL-3.0 incorporates the GPL-3.0's terms, whose text is in `licenses/GPL-3.0.txt`);
+PyTorch, pynwb, hdmf and ndx-pose are BSD; OpenCV is Apache-2.0 with an LGPL build of FFmpeg, which
+decodes the videos and encodes the QC clip (VP9 via libvpx, BSD). **Nothing GPL is in the image**:
+no `ffmpeg` executable (imageio-ffmpeg, a declared DeepLabCut dependency that DeepLabCut does not
+import, is left out) and no PyAV. The gpu image contains NVIDIA's CUDA
 libraries (proprietary, redistributable). **The SuperAnimal weights are academic, non-commercial
 only.** Details in `THIRD_PARTY.md`.
 

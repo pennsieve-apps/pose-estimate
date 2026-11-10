@@ -42,17 +42,22 @@ used (they are still present in the image).
 | albumentations 1.4.3 | Image transforms used by DeepLabCut | Buslaev et al. | MIT | https://github.com/albumentations-team/albumentations |
 | pynwb 4.2.0, hdmf 6.2.0 | Writing NWB | Tritt, Ly, Ruebel, Dichter et al. (LBNL) | BSD-3-Clause | https://github.com/NeurodataWithoutBorders/pynwb |
 | ndx-pose 0.4.0 | NWB pose extension (PoseEstimation, Skeleton) | Ryan Ly, Ben Dichter, Alexander Mathis, Liezl Maree, Chris Brozdowski, Heberto Mayorquin, Talmo Pereira, Elizabeth Berrigan, Paul Adkisson, Alessandra Trapani | BSD-3-Clause | https://github.com/rly/ndx-pose |
-| opencv-python-headless 4.14.0.94 | Video decoding, drawing | OpenCV team | Apache-2.0; the wheel bundles an **LGPL-2.1** build of FFmpeg (no GPL parts) | https://github.com/opencv/opencv-python |
-| imageio-ffmpeg 0.8.1 | Ships an `ffmpeg` executable, used as a **separate program** to encode the H.264 QC clip and probe videos | imageio contributors; FFmpeg developers; x264 developers | Python package BSD-2-Clause; the bundled `ffmpeg` binary (`ffmpeg-linux-x86_64-v9.0.2`, SHA-256 `0d709a0bed1a43f24cd2c420878c63afea4580671b6949ad19ed124572f3bc3d`) is FFmpeg n9.0.2-17-g2a571b6068 from BtbN/FFmpeg-Builds release `autobuild-2026-09-30-13-08` (`ffmpeg-n9.0.2-17-g2a571b6068-linux64-gpl-9.0.tar.xz`), configured with `--enable-gpl --enable-version3` (libx264, libx265 and others), so it is under the **GPL-3.0-or-later** ([`licenses/GPL-3.0.txt`](licenses/GPL-3.0.txt)). It is not linked into this app's process (mere aggregation). Source: the FFmpeg commit 2a571b6068 at https://git.ffmpeg.org/ffmpeg.git, the build scripts at https://github.com/BtbN/FFmpeg-Builds, x264 at https://code.videolan.org/videolan/x264 | https://github.com/imageio/imageio-ffmpeg |
+| opencv-python-headless 4.14.0.94 | Video decoding and probing, drawing, and the QC clip (VP9 in WebM) | OpenCV team; FFmpeg developers; WebM project (libvpx); VideoLAN (dav1d); AOM (libaom) | Apache-2.0; the wheel bundles FFmpeg (libavcodec 62.28.102 and friends) configured with `--enable-libvpx --enable-libdav1d --enable-openssl` and **without** `--enable-gpl` (its license string: "LGPL version 2.1 or later"), libvpx (BSD-3-Clause), dav1d (BSD-2-Clause), libaom (BSD-2-Clause + AOM patent licence), OpenSSL 1.1.1k (OpenSSL licence), OpenBLAS (BSD-3-Clause) and libgfortran (GPL-3.0 with the GCC Runtime Library Exception, which permits this use); details in the wheel's `LICENSE-3RD-PARTY.txt` | https://github.com/opencv/opencv-python |
 | huggingface_hub 2.4.0 | Build-time download of the weights (offline at run time) | Hugging Face | Apache-2.0 | https://github.com/huggingface/huggingface_hub |
 | NumPy 2.5.4, SciPy 1.18.1, pandas 2.3.3, h5py 3.16.0, PyTables 3.11.1, numexpr, Bottleneck, blosc2 | Arrays, tables, HDF5 (the DeepLabCut .h5) | their developers | BSD-3-Clause (h5py, PyTables, blosc2: BSD) | PyPI |
 | Matplotlib 3.11.2 | Figures | Matplotlib development team | Matplotlib licence (PSF-based) | https://matplotlib.org |
 | scikit-image, scikit-learn, statsmodels, numba, llvmlite, pycocotools, filterpy, einops, networkx, pillow, pydantic, ruamel.yaml, PyYAML, tqdm, rich, safetensors, imageio, tifffile, ... | Dependencies of DeepLabCut (versions in `requirements.txt`) | their developers | BSD / MIT / Apache-2.0 / HPND (Pillow); tqdm MPL-2.0 AND MIT; certifi MPL-2.0 | PyPI |
 | python:3.12.16-slim-bookworm | Base image (Debian 12 + CPython 3.12) | PSF; Debian | PSF; Debian packages under their own free licences | https://hub.docker.com/_/python |
 
-**Why not PyAV:** PyAV's binary wheels link an FFmpeg built with libx264 (GPL) into the Python
-process, which would make this repository GPL under the builder brief's rule. Decoding therefore
-uses OpenCV's LGPL FFmpeg, and only the separate `ffmpeg` executable touches x264.
+**Nothing GPL in the app.** Video is decoded and the QC clip encoded only through OpenCV's LGPL
+FFmpeg. Left out on purpose: PyAV (its wheels link an FFmpeg built with libx264, GPL, into the
+process) and imageio-ffmpeg (a declared dependency of DeepLabCut that DeepLabCut's Python code does
+not import; its `ffmpeg` executable is a GPL-3.0 build). DeepLabCut's own video utilities that call
+an `ffmpeg` program (labelled videos, cropping) are not used, and there is no such program in the
+image.
+`licenses/GPL-3.0.txt` is there because the LGPL-3.0 of DeepLabCut and dlclibrary incorporates the
+GPL-3.0's terms and requires its text. As in any Debian-based image, the base system's own
+command-line tools (bash, coreutils, ...) are GPL programs; the app does not link them.
 
 ## Not bundled
 

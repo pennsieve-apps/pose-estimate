@@ -5,14 +5,24 @@ x 3) are kept, never the movie.
 
 DETECTOR_STRIDE > 1 (single animal only) runs the detector on every k-th frame and on the last
 frame of each chunk, and gives the frames in between a box interpolated linearly between the two
-nearest detections, enlarged by BOX_MARGIN on every side to cover the movement. The detector is
-the expensive part on a CPU (about 30x the pose model for a 1100 x 954 frame).
+neighbouring detections, enlarged by BOX_MARGIN on every side to cover the movement, but only when
+those two boxes overlap or their centres are within one box size of each other: a jump means one
+of them is something else (a bright fixture of the rig, for example), and sweeping a box across
+the arena would give poses of nothing. The detector is the expensive part on a CPU (about 30x the
+pose model for a 1100 x 954 frame).
+
+Single animal: a pose whose mean keypoint confidence is below GAP_MIN_CONFIDENCE is treated as
+"not found" (NaN), whatever its box came from (a detection, an interpolated box, a carried box),
+so a detector false positive on a rig object does not produce a pose, and gap filling can take
+over.
 
 FILL_DETECTOR_GAPS (single animal): when the detector finds no animal in a frame (it misses
 small, curled-up or rearing mice under a cable, for example), the box is taken from the previous
 frame's pose (its confident keypoints, at least the size of the last detected box) and the pose
-model runs on it; this continues frame by frame while the mean keypoint confidence stays above
-GAP_MIN_CONFIDENCE, and stops otherwise until the detector finds the animal again.
+model runs on it; this continues frame by frame while the mean keypoint confidence stays at or
+above GAP_MIN_CONFIDENCE, and stops otherwise until the detector finds the animal again. The
+carried box can follow a non-mouse object (a cable, a shadow) until then, as long as the pose
+model is confident enough on it.
 """
 from __future__ import annotations
 
@@ -40,6 +50,8 @@ class PoseResult:
     detector_runs: int
     seconds: float
     frames_box_from_pose: int = 0  # frames whose box came from the previous frame's pose (FILL_DETECTOR_GAPS)
+    frames_box_interpolated: int = 0
+    frames_dropped_low_confidence: int = 0   # a box was given, but the pose's mean confidence was too low
 
 
 def _best_boxes(pred: dict, max_ind: int) -> tuple[np.ndarray, np.ndarray]:
@@ -68,6 +80,18 @@ def _box_from_pose(prev: np.ndarray, last_size: np.ndarray, size: tuple[int, int
     return np.array([bx0, by0, bx1 - bx0, by1 - by0], dtype=np.float32)
 
 
+def boxes_close(b0: np.ndarray, b1: np.ndarray) -> bool:
+    """Two (x, y, w, h) boxes overlap, or their centres are within one box size of each other."""
+    ax0, ay0, aw, ah = (float(v) for v in b0[:4])
+    bx0, by0, bw, bh = (float(v) for v in b1[:4])
+    iw = min(ax0 + aw, bx0 + bw) - max(ax0, bx0)
+    ih = min(ay0 + ah, by0 + bh) - max(ay0, by0)
+    if iw > 0 and ih > 0:
+        return True
+    d = np.hypot((ax0 + aw / 2) - (bx0 + bw / 2), (ay0 + ah / 2) - (by0 + bh / 2))
+    return bool(d <= max(aw, ah, bw, bh))
+
+
 def _interp_box(b0, b1, w: float) -> np.ndarray:
     return (1 - w) * b0 + w * b1
 
@@ -92,7 +116,7 @@ def run(frames, n_total: int, pose_runner, detector_runner, n_keypoints: int, ma
     t0 = last_log = time.time()
     done, det_runs = 0, 0
     last_size = np.array([np.nan, np.nan], dtype=np.float32)
-    counts = {"from_pose": 0}
+    counts = {"from_pose": 0, "interpolated": 0, "dropped": 0}
     buf_idx, buf = [], []
 
     def flush():
@@ -123,11 +147,13 @@ def run(frames, n_total: int, pose_runner, detector_runner, n_keypoints: int, ma
                 after = [j for j in found if j > i]
                 if not before and not after:
                     continue
-                if before and after:
+                if before and after and boxes_close(found[max(before)][0][0], found[min(after)][0][0]):
                     j0, j1 = max(before), min(after)
                     w = (i - j0) / (j1 - j0)
                     box = _interp_box(found[j0][0][0], found[j1][0][0], w)
                     score = min(found[j0][1][0], found[j1][1][0])
+                elif before and after:
+                    continue                  # the two detections disagree: leave it to gap filling
                 else:
                     j = max(before) if before else min(after)
                     if abs(j - i) > stride:   # no detection close enough
@@ -150,6 +176,13 @@ def run(frames, n_total: int, pose_runner, detector_runner, n_keypoints: int, ma
                     boxes[row, :k, :4] = bb
                     sc = np.asarray(ctx[i]["bbox_scores"], dtype=np.float32)[:k]
                     boxes[row, :k, 4] = np.nan if ctx[i].get("_interpolated") else sc
+                if max_ind == 1 and not np.nan_to_num(poses[row, 0, :, 2]).mean() >= GAP_MIN_CONFIDENCE:
+                    poses[row] = np.nan               # a box with nothing the model recognises: not found
+                    boxes[row] = np.nan
+                    ctx[i] = None
+                    counts["dropped"] += 1
+                elif ctx[i] is not None and ctx[i].get("_interpolated"):
+                    counts["interpolated"] += 1
         if fill_gaps and detector_runner is not None and max_ind == 1:
             for i in range(n):
                 if ctx[i] is not None:
@@ -197,4 +230,5 @@ def run(frames, n_total: int, pose_runner, detector_runner, n_keypoints: int, ma
     poses[..., 1] += offset[1]
     boxes[..., 0] += offset[0]
     boxes[..., 1] += offset[1]
-    return PoseResult(idx_all, poses, boxes, det_runs, time.time() - t0, counts["from_pose"])
+    return PoseResult(idx_all, poses, boxes, det_runs, time.time() - t0, counts["from_pose"], counts["interpolated"],
+                      counts["dropped"])

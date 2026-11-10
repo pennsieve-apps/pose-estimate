@@ -1,8 +1,9 @@
 # Installed with `pip install --no-deps -r requirements.txt -r requirements-${TORCH_FLAVOUR}.txt`: the
 # complete, pinned set, resolved for linux/amd64 inside python:3.12.16-slim-bookworm (pip --dry-run --report),
 # except PyTorch / torchvision, which come from requirements-cpu.txt (cpu variant) or requirements-cuda.txt
-# (gpu variant). PyAV is deliberately absent (its wheels link a GPL FFmpeg into the process): video is decoded
-# with OpenCV (LGPL FFmpeg) and the QC clip is encoded by imageio-ffmpeg's separate ffmpeg executable.
+# (gpu variant). Nothing GPL: video is decoded and the QC clip encoded (VP9/WebM) with OpenCV's LGPL FFmpeg;
+# PyAV (whose wheels link a GPL FFmpeg) and imageio-ffmpeg (a GPL ffmpeg executable, a declared dependency of
+# DeepLabCut used only by its labelled-video helpers, which this app does not call) are left out.
 
 # Direct dependencies
 deeplabcut==3.0.2
@@ -10,7 +11,6 @@ ndx-pose==0.4.0
 pynwb==4.2.0
 hdmf==6.2.0
 opencv-python-headless==4.14.0.94
-imageio-ffmpeg==0.8.1
 huggingface-hub==2.4.0
 numpy==2.5.4
 pandas==2.3.3

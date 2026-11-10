@@ -121,8 +121,12 @@ def sheet_match(rows: list[SheetRow], path: Path, derived_id: str | None = None)
             if not target:
                 continue
             target = target.rstrip("/")
-            tail = Path(target).name
-            hit = (str(path).endswith(target) or tail in parts)
+            tparts = Path(target).parts
+            # the whole relative path matches the end of this file's path, or a file / folder name exactly
+            if len(tparts) > 1:
+                hit = tuple(path.parts[-len(tparts):]) == tparts
+            else:
+                hit = Path(target).name in parts
             if hit and len(target) > best_len:
                 best, best_len = row, len(target)
     if best is None and derived_id:
@@ -154,7 +158,7 @@ def find_inputs(root: Path) -> Inputs:
         if in_model:
             continue      # a lab's project folder may hold its own videos and labelled data
         if low.endswith(VIDEO_EXTENSIONS):
-            if "_labeled" in low or low.endswith("_qc.mp4"):
+            if "_labeled" in low:
                 continue  # labelled QC clips (ours or DeepLabCut's) are not raw video
             videos.append(f)
         elif low.endswith(NWB_EXTENSIONS):

@@ -54,7 +54,7 @@ def individual_names(n: int) -> list[str]:
 def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path: Path, video_size: tuple[int, int],
               times: np.ndarray, poses: np.ndarray, bodyparts: list[str], edges: list[tuple[int, int]],
               scorer: str, software_version: str, model_description: str, labeled_clip: str | None,
-              sheet_columns: dict, app_version: str) -> list[str]:
+              sheet_columns: dict, app_version: str, licence_notice: str | None = None) -> list[str]:
     """Writes the NWB; returns the subject fields DANDI requires that are unknown (not DANDI-ready)."""
     from hdmf.backends.hdf5.h5_utils import H5DataIO
     from ndx_pose import PoseEstimation, PoseEstimationSeries, Skeleton, Skeletons
@@ -95,7 +95,8 @@ def write_nwb(path: Path, *, session_id: str, identity: dict | None, video_path:
         lab=ident.get("lab") or None, experiment_description=ident.get("experiment_description") or None,
         keywords=list(dict.fromkeys(_as_list(ident.get("keywords")) + ["pose estimation", "DeepLabCut", "behavior"])),
         session_id=ident.get("session_id") or session_id,
-        notes=f"Pose from {video_path.name} by pose-estimate {app_version}: {model_description}.{start_note}{source_note}")
+        notes=f"Pose from {video_path.name} by pose-estimate {app_version}: {model_description}.{start_note}{source_note}"
+              + (f" {licence_notice}" if licence_notice else ""))
     camera = nwb.create_device(name="camera", description=f"camera that recorded {video_path.name}")
     behavior = nwb.create_processing_module(name="behavior", description="Pose estimated from video (pose-estimate)")
     n_ind = poses.shape[1]

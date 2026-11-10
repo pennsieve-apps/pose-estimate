@@ -62,7 +62,7 @@ def tool_versions() -> dict:
     from importlib.metadata import PackageNotFoundError, version as v
     out = {}
     for pkg in ("deeplabcut", "torch", "torchvision", "pynwb", "ndx-pose", "hdmf", "opencv-python-headless",
-                "imageio-ffmpeg", "numpy", "pandas", "tables"):
+                "numpy", "pandas", "tables"):
         try:
             out[pkg] = v(pkg)
         except PackageNotFoundError:
@@ -121,7 +121,7 @@ def qc_window(times: np.ndarray, pose: np.ndarray, seconds: float, pcutoff: floa
     return best, best + L
 
 
-def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p, model_base, device, out_dir,
+def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p, model_base, device, out_dir, notice,
                     runners_cache, warnings_all) -> dict:
     from processor import compare as CP
     from processor import figures as FG
@@ -196,26 +196,32 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
     bodyparts = model.bodyparts
     pc = p["PCUTOFF"]
     conf0 = poses[:, 0, :, 2]
-    detected = np.isfinite(conf0).any(1)
+    from processor.infer import GAP_MIN_CONFIDENCE
+    # "found": a pose whose mean keypoint confidence reaches GAP_MIN_CONFIDENCE (0.25)
+    detected = np.nan_to_num(conf0, nan=0.0).mean(1) >= GAP_MIN_CONFIDENCE
     c0 = np.nan_to_num(conf0, nan=0.0)
     mean_conf = c0.mean(0)
     frac_low = (c0 < pc).mean(0)
     frame_ok = (c0 >= pc).mean(1) >= 0.5
     fps_proc = len(sel) / res.seconds if res.seconds > 0 else None
     log.info("%s: pose on %d frames in %.0f s (%.2f frames/s; detector on %d frames, box from the previous pose in %d); "
-             "animal found in %.1f%% of frames, mean confidence %.2f", sid, len(sel), res.seconds, fps_proc or 0,
-             res.detector_runs, res.frames_box_from_pose, 100 * detected.mean(), float(c0.mean()))
+             "interpolated box in %d, dropped as low-confidence %d; animal found in %.1f%% of frames, mean confidence %.2f",
+             sid, len(sel), res.seconds, fps_proc or 0, res.detector_runs, res.frames_box_from_pose,
+             res.frames_box_interpolated, res.frames_dropped_low_confidence, 100 * detected.mean(), float(c0.mean()))
 
     # outputs
     prefix = out_dir / sid
-    clip_name = f"{sid}_labeled.mp4"
+    clip_name = None
     a, b = qc_window(times, poses, p["QC_CLIP_SECONDS"], pc)
     clip_written = False
     if b > a:
         scale = min(1.0, 720.0 / info.width)
         out_w, out_h = int(info.width * scale) // 2 * 2, int(info.height * scale) // 2 * 2
         fps_clip = min(60.0, info.fps / p["FRAME_STRIDE"])
-        writer = VD.ClipWriter(out_dir / clip_name, out_w, out_h, fps_clip)
+        writer = VD.ClipWriter(out_dir / f"{sid}_labeled", out_w, out_h, fps_clip)
+        clip_name = writer.path.name
+        if writer.codec != "vp9":
+            warns.append(f"QC clip written as {writer.codec} ({clip_name}): this OpenCV build has no VP9 encoder")
         row = {fi: r for r, fi in enumerate(sel[a:b])}
         import cv2
         for fi, fr in VD.read_frames(video, sel[a:b], None):
@@ -233,7 +239,7 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
                  video_size=(info.width, info.height), times=times, poses=poses, bodyparts=bodyparts,
                  edges=model.edges, scorer=model.scorer, software_version=tool_versions().get("deeplabcut", "?"),
                  model_description=model.description, labeled_clip=clip_name if clip_written else None,
-                 sheet_columns=sheet_cols, app_version=version())
+                 sheet_columns=sheet_cols, app_version=version(), licence_notice=notice)
     if missing:
         warns.append(f"{sid}_pose.nwb is valid NWB but not DANDI-ready: subject {', '.join(missing)} unknown (link the "
                      "session NWB, or add these columns to sessions.csv)")
@@ -287,7 +293,7 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
     FG.confidence_over_time(out_dir / f2, sid, times, conf0, bodyparts, pc, detected)
     figs.append({"path": f2, "caption": (
         f"{sid}: how confident the model is for each keypoint (rows) over the session (dark = confident). Below: the "
-        f"fraction of keypoints above the cut-off ({pc:g}) and (dashed) whether the animal was detected. Look for "
+        f"fraction of keypoints above the cut-off ({pc:g}) and (dashed) whether the animal was found (a pose with mean keypoint confidence of at least 0.25). Look for "
         "keypoints that are pale throughout (the model rarely sees them: occluded, or not visible from this camera "
         "angle) and for dips in time (the animal rearing, grooming, at the wall, or out of view).")})
     f3 = f"{sid}_keypoint_confidence.png"
@@ -302,7 +308,8 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
         ours_xy = {k: poses[:, 0, bodyparts.index(k), :2] for k in agr["matched_keypoints"]}
         ref = session.poses[0]
         rt = next(s[2] for s in ref.series.values() if s[2] is not None)
-        jj = np.clip(np.searchsorted(rt, times), 0, len(rt) - 1)
+        jj = np.clip(np.searchsorted(rt, times), 1, len(rt) - 1)
+        jj = np.where(np.abs(rt[jj - 1] - times) <= np.abs(rt[jj] - times), jj - 1, jj)   # nearest frame
         ref_xy = {k: ref.series[v][0][jj, :2] for k, v in agr["matched_keypoints"].items()}
         FG.agreement(out_dir / f4, sid, times, agr, ours_xy, ref_xy)
         figs.append({"path": f4, "caption": (
@@ -327,7 +334,9 @@ def process_session(*, sid, video, sheet_cols, sessions_nwb, nwb_by_sid, inp, p,
         "n_frames_analysed": int(len(sel)), "t_start": _r(times[0], 4), "t_stop": _r(times[-1], 4),
         "duration_analysed_s": _r(times[-1] - times[0] + (1.0 / info.fps) * p["FRAME_STRIDE"], 3),
         "time_source": tb.source, "time_source_detail": tb.detail,
-        "fraction_frames_detected": _r(detected.mean(), 4),
+        "fraction_frames_found": _r(detected.mean(), 4),
+        "fraction_frames_box_interpolated": _r(res.frames_box_interpolated / max(1, len(sel)), 4),
+        "fraction_frames_dropped_low_confidence": _r(res.frames_dropped_low_confidence / max(1, len(sel)), 4),
         "fraction_frames_box_from_pose": _r(res.frames_box_from_pose / max(1, len(sel)), 4),
         "mean_confidence": _r(c0.mean(), 4),
         "pcutoff": pc,
@@ -359,6 +368,10 @@ def main() -> int:
     except PR.ParameterError as exc:
         log.error("bad parameter: %s", exc)
         return 2
+    if p["VIDEO_ADAPT"] and variant() == "cpu":
+        log.error("VIDEO_ADAPT=true needs the gpu variant: on the cpu variant it takes hours and peaks at about "
+                  "7.5 GB of memory, against the variant's 8 GB")
+        return 2
     in_dir = Path(os.environ.get("INPUT_DIR", "/data/input"))
     out_root = Path(os.environ.get("OUTPUT_DIR", "/data/output"))
     out_dir = out_root / APP / p["LABEL"] if p["LABEL"] else out_root / APP
@@ -376,7 +389,7 @@ def main() -> int:
         return 1
     inp = find_inputs(in_dir)
     if not inp.videos:
-        log.error("no video (%s) found under %s", ", ".join(("mp4", "avi", "mov")), in_dir)
+        log.error("no video (%s) found under %s", ", ".join(("mp4", "avi", "mov", "webm", "m4v", "mkv")), in_dir)
         return 1
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -393,6 +406,9 @@ def main() -> int:
     elif p["VIDEO_ADAPT"]:
         log.warning("VIDEO_ADAPT applies to SuperAnimal models only; the lab's model is used as given")
     log.info("model: %s", model.description)
+    notice = MD.licence_notice(model.name) if model.kind == "superanimal" else None
+    if notice:
+        log.info("USAGE AND LICENCE: %s", notice)
 
     warnings_all: list[str] = []
     sessions_nwb, nwb_by_sid = [], {}
@@ -432,8 +448,7 @@ def main() -> int:
         summary = {
             "app": APP, "version": version(), "variant": variant(),
             "model": model.name, "scorer": model.scorer, "model_kind": model.kind,
-            "licence_notice": ("SuperAnimal model weights (Mathis lab): academic, non-commercial use only; see THIRD_PARTY.md"
-                               if model.kind == "superanimal" else "the lab's own model; SuperAnimal weights not used"),
+            "licence_notice": notice,
             "n_sessions": len(results), "n_ok": len(ok),
             "sessions": results,
             "figures": figures,
@@ -457,6 +472,7 @@ def main() -> int:
             "gpu": gpu,
             "sessions": prov_sessions,
             "citations": CITATIONS,
+            "licence_notice": notice,
         }
         write_json(out_dir / "provenance.json", prov)
         return prov
@@ -467,6 +483,8 @@ def main() -> int:
         row = sheet_match(inp.sheet, video, derive_session_id(video, in_dir))
         sid = row.session_id if row else derive_session_id(video, in_dir)
         cols = dict(row.columns) if row else {}
+        if not cols.get("subject_id") and sid.startswith("sub-") and "_ses-" in sid:
+            cols["subject_id"] = sid[len("sub-"):sid.index("_ses-")]      # from the DANDI/BIDS name
         if sid in used_ids:
             used_ids[sid] += 1
             new = f"{sid}-{used_ids[sid]}"
@@ -480,7 +498,7 @@ def main() -> int:
                "group": cols.get("group", ""), **{k: v for k, v in cols.items() if k not in ("subject_id", "condition", "group")}}
         try:
             r = process_session(sid=sid, video=video, sheet_cols=cols, sessions_nwb=sessions_nwb, nwb_by_sid=nwb_by_sid,
-                                inp=inp, p=p, model_base=model, device=device, out_dir=out_dir,
+                                inp=inp, p=p, model_base=model, device=device, out_dir=out_dir, notice=notice,
                                 runners_cache=runners_cache, warnings_all=warnings_all)
             results[sid] = r["summary"]
             figures += r["figures"]
@@ -489,7 +507,7 @@ def main() -> int:
             prov_sessions[sid] = {"status": "ok", "seconds": round(time.time() - ts, 1)}
             s = r["summary"]
             log.info("%s: ok in %.0f s; %d frames, animal found in %.1f%%, mean confidence %.2f%s", sid, time.time() - ts,
-                     r["n_analysed"], 100 * s["fraction_frames_detected"], s["mean_confidence"],
+                     r["n_analysed"], 100 * s["fraction_frames_found"], s["mean_confidence"],
                      f", median {s['agreement']['median_px_error']} px from the session NWB's pose"
                      if s.get("agreement") else "")
         except Exception as exc:  # noqa: BLE001 - one failed session must not stop the others
