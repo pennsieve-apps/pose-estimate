@@ -1,5 +1,6 @@
 cff-version: 1.2.0
-message: If you use this app, please cite it and the works it builds on, listed under references.
+message: >-
+  If you use this app, please cite the work it implements (preferred-citation), this release, and Pennsieve (RRID:SCR_021677); the other works it builds on are listed under references.
 type: software
 title: pose-estimate
 abstract: 'Markerless pose estimation from video with DeepLabCut 3 (Mathis labs): SuperAnimal pretrained models (TopViewMouse,
@@ -26,6 +27,36 @@ keywords:
 - deeplabcut
 - quality-control
 - gpu
+# The work this app implements; the release report's "How to cite" puts it first.
+preferred-citation:
+  type: article
+  title: 'DeepLabCut: markerless pose estimation of user-defined body parts with deep learning'
+  authors:
+  - family-names: Mathis
+    given-names: Alexander
+  - family-names: Mamidanna
+    given-names: Pranav
+  - family-names: Cury
+    given-names: Kevin M.
+  - family-names: Abe
+    given-names: Taiga
+  - family-names: Murthy
+    given-names: Venkatesh N.
+  - family-names: Mathis
+    given-names: Mackenzie Weygandt
+  - family-names: Bethge
+    given-names: Matthias
+  year: 2018
+  journal: Nature Neuroscience
+  volume: 21
+  issue: '9'
+  start: '1281'
+  end: '1289'
+  doi: 10.1038/s41593-018-0209-y
+  identifiers:
+  - type: other
+    value: '30127430'
+    description: PubMed ID
 references:
 - type: article
   title: 'DeepLabCut: markerless pose estimation of user-defined body parts with deep learning'
